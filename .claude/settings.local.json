@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Project\\\\StudyMatch-System\" -Directory)",
+      "Bash(Select-Object Name)",
+      "PowerShell(Get-ChildItem \"c:\\\\Project\\\\StudyMatch-System\\\\studymatch-api\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName | Sort-Object FullName)",
+      "Bash(php artisan *)",
+      "Bash(mysql -u root -e \"CREATE DATABASE IF NOT EXISTS studymatch CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/login -H \"Content-Type: application/json\" -H \"Accept: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"student@test.com\\\\\",\\\\\"password\\\\\":\\\\\"password\\\\\"}\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Project\\\\StudyMatch-System\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell([System.IO.Directory]::GetFiles\\(\"C:\\\\Project\\\\StudyMatch-System\\\\studymatch-mobile\"\\) | Select-Object -First 20)",
+      "PowerShell([System.IO.Directory]::GetDirectories\\(\"C:\\\\Project\\\\StudyMatch-System\\\\studymatch-mobile\"\\))",
+      "PowerShell([System.IO.Directory]::GetDirectories\\(\"C:\\\\Project\\\\StudyMatch-System\\\\studymatch-mobile\\\\studymatch-mobile\"\\))",
+      "PowerShell([System.IO.Directory]::GetFiles\\(\"C:\\\\Project\\\\StudyMatch-System\\\\studymatch-mobile\\\\studymatch-mobile\"\\))"
+    ]
+  }
+}

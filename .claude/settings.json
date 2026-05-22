@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub *)",
+      "Bash(flutter --version)",
+      "Bash(flutter devices *)",
+      "Bash(flutter emulators *)",
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\Project\\\\StudyMatch-System\\\\studymatch-mobile\\\\studymatch-mobile\\\\assets\\\\images\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Host \"Created\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Project\\\\StudyMatch-System\\\\studymatch-mobile\\\\studymatch-mobile\\\\assets\\\\images\")",
+      "Bash(flutter build *)",
+      "Bash(flutter analyze *)"
+    ]
+  }
+}
