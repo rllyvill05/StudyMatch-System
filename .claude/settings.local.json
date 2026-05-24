@@ -41,7 +41,12 @@
       "PowerShell(Get-ChildItem \"C:\\\\Project\\\\StudyMatch-System\\\\studymatch-web\\\\.git\" -Force -ErrorAction SilentlyContinue | ForEach-Object { \"$\\($_.Name\\) [$\\($_.Attributes\\)]\" })",
       "Bash(git -C C:/Project/StudyMatch-System/studymatch-web worktree repair)",
       "Bash(git -C C:/Project/StudyMatch-System rm --cached studymatch-web studymatch-api studymatchadmin)",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(rm -rf C:/Project/StudyMatch-System/studymatch-web/.git)",
+      "Bash(rm -rf C:/Project/StudyMatch-System/studymatch-api/.git)",
+      "Bash(rm -rf C:/Project/StudyMatch-System/studymatchadmin/.git)",
+      "Bash(rm -rf C:/Project/StudyMatch-System/studymatch-mobile/.git)",
+      "Bash(git -C C:/Project/StudyMatch-System add .)"
     ]
   }
 }

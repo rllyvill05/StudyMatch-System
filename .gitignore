@@ -1,5 +1,23 @@
-# Each sub-project manages its own git repository
-studymatch-web/
-studymatch-api/
-studymatchadmin/
-studymatch-mobile/
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+build/
+dist/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
