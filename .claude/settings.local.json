@@ -46,7 +46,11 @@
       "Bash(rm -rf C:/Project/StudyMatch-System/studymatch-api/.git)",
       "Bash(rm -rf C:/Project/StudyMatch-System/studymatchadmin/.git)",
       "Bash(rm -rf C:/Project/StudyMatch-System/studymatch-mobile/.git)",
-      "Bash(git -C C:/Project/StudyMatch-System add .)"
+      "Bash(git -C C:/Project/StudyMatch-System add .)",
+      "Bash(git -C C:/Project/StudyMatch-System status --short)",
+      "Bash(git -C C:/Project/StudyMatch-System commit -m \"add all sub-projects as regular folders for team access\")",
+      "Bash(git -C C:/Project/StudyMatch-System push)",
+      "Bash(git -C C:/Project/StudyMatch-System push --set-upstream origin main)"
     ]
   }
 }
