@@ -32,3 +32,17 @@ export const sendMessage = async (partnerId, content) => {
     throw error;
   }
 };
+
+export const sendFile = async (partnerId, file, caption = '') => {
+  const formData = new FormData()
+  formData.append('receiver_id', partnerId)
+  formData.append('file', file)
+  if (caption) formData.append('caption', caption)
+  try {
+    const response = await api.post('/chat/send-file', formData)
+    return response.data
+  } catch (error) {
+    console.error('Failed to send file:', error)
+    throw error
+  }
+};

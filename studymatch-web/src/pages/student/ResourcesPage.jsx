@@ -122,7 +122,7 @@ export default function StudentResourcesPage() {
     setError('')
     try {
       const res  = await getResources(params)
-      const data = res?.data || res || []
+      const data = res?.data?.data || res?.data || res || []
       setResources(Array.isArray(data) ? data : [])
     } catch {
       setError('Failed to load resources. Please try again.')

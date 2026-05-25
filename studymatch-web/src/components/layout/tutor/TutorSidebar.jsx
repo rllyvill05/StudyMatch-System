@@ -6,8 +6,8 @@ import logo from '../../../assets/logo.png'
 import {
   LayoutDashboard, Users, CalendarDays, MessageCircle,
   Library, UserCircle, Settings, HelpCircle,
-  ChevronDown, ChevronRight, ChevronLeft,
-  PanelLeftClose, PanelLeftOpen, Trophy, Shield, HeartHandshake,
+  ChevronDown, ChevronRight,
+  PanelLeftClose, PanelLeftOpen, Trophy, Shield,
 } from 'lucide-react'
 
 /* ─── nav config ─────────────────────────────────────────────── */
@@ -15,7 +15,6 @@ import {
 const NAV_LINKS = [
   { icon: LayoutDashboard, label: 'Dashboard',     to: '/tutor/dashboard'      },
   { icon: Users,           label: 'Find Students', to: '/tutor/find-students'  },
-  { icon: HeartHandshake, label: 'My Matches',    to: '/tutor/matches'        },
   { icon: CalendarDays,    label: 'Study Sessions',to: '/tutor/study-sessions' },
   { icon: MessageCircle,   label: 'Messages',      to: '/tutor/messages', badge: true },
   { icon: Library,         label: 'Resources',     to: '/tutor/resources'      },

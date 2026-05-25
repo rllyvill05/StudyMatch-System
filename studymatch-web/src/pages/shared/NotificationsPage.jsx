@@ -254,6 +254,7 @@ export default function NotificationsPage() {
   const [timezone, setTimezone]   = useState('(GMT+8:00) Manila')
   const [digestOn, setDigestOn]   = useState(true)
   const [frequency, setFrequency] = useState('Daily')
+  const [prefsSaved, setPrefsSaved] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -540,12 +541,19 @@ export default function NotificationsPage() {
                 </div>
               ))}
             </div>
-            <button style={{
-              width: '100%', marginTop: 14, padding: '10px',
-              background: '#7C3AED', color: 'white', border: 'none',
-              borderRadius: 10, fontSize: 13.5, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit', transition: 'background .15s',
-            }}
+            {prefsSaved && (
+              <div style={{ fontSize: 12.5, color: '#10B981', fontWeight: 600, marginTop: 8, textAlign: 'center' }}>
+                Preferences saved!
+              </div>
+            )}
+            <button
+              onClick={() => { setPrefsSaved(true); setTimeout(() => setPrefsSaved(false), 2500) }}
+              style={{
+                width: '100%', marginTop: 14, padding: '10px',
+                background: '#7C3AED', color: 'white', border: 'none',
+                borderRadius: 10, fontSize: 13.5, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit', transition: 'background .15s',
+              }}
               onMouseEnter={e => e.currentTarget.style.background = '#6D28D9'}
               onMouseLeave={e => e.currentTarget.style.background = '#7C3AED'}
             >

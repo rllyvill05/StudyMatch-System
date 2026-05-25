@@ -83,7 +83,7 @@ export default function AdminDashboardPage() {
         <div style={{ background: '#fff', borderRadius: 20, padding: 24, border: '1px solid #E5E7EB' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', margin: 0 }}>Pending Tutor Verifications</h2>
-            <Link to="/admin/tutors/pending" style={{ fontSize: 13, color: '#7C3AED', fontWeight: 600, textDecoration: 'none' }}>View all</Link>
+            <Link to="/admin/tutors" style={{ fontSize: 13, color: '#7C3AED', fontWeight: 600, textDecoration: 'none' }}>View all</Link>
           </div>
 
           {pendingTutors.length === 0 ? (
@@ -101,7 +101,7 @@ export default function AdminDashboardPage() {
                   <div style={{ fontWeight: 600, color: '#111827' }}>{name}</div>
                   <div style={{ color: '#6B7280', fontSize: 14 }}>{date}</div>
                 </div>
-                <Link to={`/admin/tutors/pending`} style={{ background: '#F3F0FF', color: '#6D5DFC', border: 'none', borderRadius: 10, padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+                <Link to="/admin/tutors" style={{ background: '#F3F0FF', color: '#6D5DFC', border: 'none', borderRadius: 10, padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
                   Review
                 </Link>
               </div>

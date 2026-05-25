@@ -27,6 +27,7 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $request->validate([
+<<<<<<< HEAD
             'name'     => 'sometimes|string|max:255',
             'fullName' => 'sometimes|string|max:255',
             'role'     => 'sometimes|in:student,tutor',
@@ -56,6 +57,25 @@ class ProfileController extends Controller
         // Delegate sub-profile fields based on current role
         if ($user->student && $request->hasAny(['student_id', 'program', 'year_level', 'bio'])) {
             $user->student->update($request->only(['student_id', 'program', 'year_level', 'bio']));
+=======
+            'name'  => 'sometimes|string|max:255',
+            'phone' => 'sometimes|nullable|string|max:20',
+        ]);
+
+        $userFields = [];
+        if ($request->has('name'))  $userFields['name']  = $request->name;
+        if ($request->has('phone')) $userFields['phone'] = $request->phone;
+        if (!empty($userFields)) $user->update($userFields);
+
+        // Delegate sub-profile fields based on role
+        if ($user->student && $request->hasAny(['student_id', 'program', 'course', 'year_level', 'bio'])) {
+            $fields = $request->only(['student_id', 'program', 'year_level', 'bio']);
+            // Accept 'course' as frontend alias for 'program'
+            if ($request->has('course') && !$request->has('program')) {
+                $fields['program'] = $request->course;
+            }
+            $user->student->update(array_filter($fields, fn($v) => $v !== null));
+>>>>>>> 636743e (updating/fixing web functions)
         }
 
         if ($user->tutor && $request->hasAny(['employee_id', 'position', 'tutor_type', 'specialization', 'hourly_rate', 'bio', 'credentials', 'is_available'])) {
@@ -104,9 +124,21 @@ class ProfileController extends Controller
             $request->validate([
                 'student_id' => 'nullable|string|max:50',
                 'program'    => 'nullable|string|max:255',
-                'year_level' => 'nullable|integer|min:1|max:6',
+                'year_level' => 'nullable|string|max:20',
             ]);
-            $user->student->update($request->only(['student_id', 'program', 'year_level']));
+
+            $yearLevelMap = [
+                '1st Year' => '1st', '2nd Year' => '2nd', '3rd Year' => '3rd',
+                '4th Year' => '4th', '5th Year' => '5th', 'Graduate' => '5th',
+            ];
+            $yearLevel = $request->year_level
+                ? ($yearLevelMap[$request->year_level] ?? $request->year_level)
+                : null;
+
+            $user->student->update(array_merge(
+                $request->only(['student_id', 'program']),
+                ['year_level' => $yearLevel]
+            ));
         } elseif ($user->tutor) {
             $request->validate([
                 'employee_id'    => 'nullable|string|max:50',
@@ -182,20 +214,20 @@ class ProfileController extends Controller
 
         if ($user->tutor) {
             $request->validate([
-                'availability'            => 'nullable|array',
-                'availability.*.day'      => 'required|in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
-                'availability.*.start_time' => 'required|date_format:H:i',
-                'availability.*.end_time'   => 'required|date_format:H:i|after:availability.*.start_time',
+                'availability'                 => 'nullable|array',
+                'availability.*.day'           => 'required|in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
+                'availability.*.start_time'    => 'required|date_format:H:i',
+                'availability.*.end_time'      => 'required|date_format:H:i|after:availability.*.start_time',
             ]);
 
             if ($request->has('availability')) {
                 $user->tutor->availability()->delete();
                 foreach ($request->availability as $slot) {
                     $user->tutor->availability()->create([
-                        'day'        => $slot['day'],
-                        'start_time' => $slot['start_time'],
-                        'end_time'   => $slot['end_time'],
-                        'is_active'  => true,
+                        'day_of_week' => $slot['day'],
+                        'start_time'  => $slot['start_time'],
+                        'end_time'    => $slot['end_time'],
+                        'is_active'   => true,
                     ]);
                 }
             }

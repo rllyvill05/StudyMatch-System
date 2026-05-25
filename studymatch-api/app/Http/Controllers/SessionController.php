@@ -62,7 +62,7 @@ class SessionController extends Controller
             'duration_minutes' => $request->duration_minutes ?? 60,
             'notes'            => $request->notes,
             'session_link'     => $request->session_link,
-            'status'           => 'scheduled',
+            'status'           => 'pending',
         ]);
 
         return response()->json(['message' => 'Session booked.', 'session' => $session->load(['tutor.user', 'subject'])], 201);
@@ -90,6 +90,42 @@ class SessionController extends Controller
         $session->update($data);
 
         return response()->json(['message' => 'Session updated.', 'session' => $session->fresh()]);
+    }
+
+    public function accept(Request $request, $id)
+    {
+        $session = Session::findOrFail($id);
+        $user    = $request->user();
+
+        if (!$user->tutor || $session->tutor_id !== $user->tutor->id) {
+            abort(403, 'Only the assigned tutor can accept this session.');
+        }
+
+        if ($session->status !== 'pending') {
+            return response()->json(['message' => 'Session is not pending.'], 422);
+        }
+
+        $session->update(['status' => 'scheduled']);
+
+        return response()->json(['message' => 'Session accepted.', 'session' => $session->fresh()]);
+    }
+
+    public function decline(Request $request, $id)
+    {
+        $session = Session::findOrFail($id);
+        $user    = $request->user();
+
+        if (!$user->tutor || $session->tutor_id !== $user->tutor->id) {
+            abort(403, 'Only the assigned tutor can decline this session.');
+        }
+
+        if ($session->status !== 'pending') {
+            return response()->json(['message' => 'Session is not pending.'], 422);
+        }
+
+        $session->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+
+        return response()->json(['message' => 'Session declined.']);
     }
 
     public function cancel(Request $request, $id)

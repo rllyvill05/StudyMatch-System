@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tutor;
-use App\Models\Subject;
 use Illuminate\Http\Request;
 
 class TutorController extends Controller
@@ -14,29 +13,55 @@ class TutorController extends Controller
     public function index(Request $request)
     {
         $query = Tutor::with(['user', 'strongSubjects.subject', 'availability'])
-            ->verified()
-            ->available();
+            ->verified();
 
-        // Filter by subject
-        if ($request->subject_id) {
+        // Filter by subject ID
+        if ($request->filled('subject_id')) {
             $query->whereHas('strongSubjects', function($q) use ($request) {
                 $q->where('subject_id', $request->subject_id);
             });
         }
 
+        // Filter by subject names (comma-separated, from frontend "subjects" param)
+        if ($request->filled('subjects')) {
+            $names = array_filter(array_map('trim', explode(',', $request->subjects)));
+            if (!empty($names)) {
+                $query->whereHas('strongSubjects.subject', function($q) use ($names) {
+                    $q->whereIn('name', $names);
+                });
+            }
+        }
+
+        // Filter by department / specialization
+        if ($request->filled('department')) {
+            $query->where('specialization', 'LIKE', '%' . $request->department . '%');
+        }
+
         // Filter by tutor type
-        if ($request->tutor_type) {
+        if ($request->filled('tutor_type')) {
             $query->where('tutor_type', $request->tutor_type);
         }
 
         // Filter by minimum rating
-        if ($request->min_rating) {
+        if ($request->filled('min_rating')) {
             $query->where('average_rating', '>=', $request->min_rating);
         }
 
         // Filter by maximum hourly rate
-        if ($request->max_rate) {
+        if ($request->filled('max_rate')) {
             $query->where('hourly_rate', '<=', $request->max_rate);
+        }
+
+        // Search by name or subject
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->whereHas('user', function($u) use ($search) {
+                    $u->where('name', 'LIKE', "%{$search}%");
+                })->orWhereHas('strongSubjects.subject', function($s) use ($search) {
+                    $s->where('name', 'LIKE', "%{$search}%");
+                })->orWhere('specialization', 'LIKE', "%{$search}%");
+            });
         }
 
         $tutors = $query->paginate(20);

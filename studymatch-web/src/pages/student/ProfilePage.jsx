@@ -6,9 +6,7 @@ import {
   Heart, Globe, Star, BookOpen, CheckCircle, Loader2, Save, X,
 } from 'lucide-react'
 
-/* ─── helpers ─────────────────────────────────────────────── */
-
-function Avatar({ name = '', color = '#7C3AED', size = 90 }) {
+function Avatar({ name = '', size = 90 }) {
   const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'
   return (
     <div style={{
@@ -25,8 +23,6 @@ function Avatar({ name = '', color = '#7C3AED', size = 90 }) {
 
 const TABS = ['Profile', 'Edit Profile', 'Preferences']
 
-/* ─── main page ───────────────────────────────────────────── */
-
 export default function StudentProfilePage() {
   const authUser = getUser()
   const [profile,   setProfile]   = useState(null)
@@ -36,10 +32,10 @@ export default function StudentProfilePage() {
   const [success,   setSuccess]   = useState('')
   const [activeTab, setActiveTab] = useState('Profile')
 
-  // Edit form state
   const [form, setForm] = useState({
-    name: '', bio: '', phone: '', course: '',
-    year_level: '', study_style: '', study_goals: '',
+    name: '', bio: '', phone: '',
+    program: '', year_level: '',
+    study_style: '', study_goals: '',
     preferred_days: '', preferred_time: '',
   })
 
@@ -48,18 +44,19 @@ export default function StudentProfilePage() {
       setLoading(true)
       try {
         const res  = await getProfile()
-        const data = res?.data || res || {}
+        const data = res?.user || res || {}
         setProfile(data)
+        const sub = data.student || {}
         setForm({
-          name:          data.name          || authUser?.name || '',
-          bio:           data.bio           || '',
-          phone:         data.phone         || '',
-          course:        data.course        || '',
-          year_level:    data.year_level    || '',
-          study_style:   data.study_style   || '',
-          study_goals:   data.study_goals   || '',
-          preferred_days:data.preferred_days|| '',
-          preferred_time:data.preferred_time|| '',
+          name:           data.name             || authUser?.name || '',
+          bio:            sub.bio               || data.bio       || '',
+          phone:          data.phone            || '',
+          program:        sub.program           || '',
+          year_level:     sub.year_level        || '',
+          study_style:    data.study_style      || '',
+          study_goals:    data.study_goals      || '',
+          preferred_days: data.preferred_days   || '',
+          preferred_time: data.preferred_time   || '',
         })
       } catch {
         setError('Failed to load profile.')
@@ -76,9 +73,8 @@ export default function StudentProfilePage() {
     setSuccess('')
     try {
       const res = await updateProfile(form)
-      const updated = res?.data || res || {}
-      setProfile(p => ({ ...p, ...updated, ...form }))
-      // Update authStore
+      const updated = res?.user || res || {}
+      setProfile(p => ({ ...p, ...updated }))
       saveAuth(getToken(), { ...authUser, name: form.name })
       setSuccess('Profile updated successfully!')
       setActiveTab('Profile')
@@ -90,28 +86,22 @@ export default function StudentProfilePage() {
     }
   }
 
-  const name    = profile?.name    || authUser?.name    || 'Student'
-  const email   = profile?.email   || authUser?.email   || ''
-  const phone   = profile?.phone   || ''
-  const course  = profile?.course  || ''
-  const year    = profile?.year_level || ''
-  const bio     = profile?.bio     || ''
-  const style   = profile?.study_style || ''
-  const goals   = profile?.study_goals || ''
-  const prefDays= profile?.preferred_days || ''
-  const prefTime= profile?.preferred_time || ''
+  const name     = profile?.name                            || authUser?.name || 'Student'
+  const email    = profile?.email                           || authUser?.email || ''
+  const phone    = profile?.phone                           || ''
+  const program  = profile?.student?.program                || ''
+  const year     = profile?.student?.year_level             || ''
+  const bio      = profile?.student?.bio                    || profile?.bio || ''
   const memberSince = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : ''
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <Loader2 size={28} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    )
-  }
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+      <Loader2 size={28} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
 
   return (
     <>
@@ -135,13 +125,11 @@ export default function StudentProfilePage() {
       <div className="pp-wrap">
         <div className="pp-main">
 
-          {/* Header */}
           <div>
             <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 4 }}>My Profile</h1>
             <p style={{ fontSize: 13, color: '#9CA3AF' }}>Manage your profile and study preferences.</p>
           </div>
 
-          {/* Tabs */}
           <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid #F0F0F4' }}>
             {TABS.map(t => (
               <button key={t} className={`pp-tab${activeTab === t ? ' active' : ''}`} onClick={() => setActiveTab(t)}>
@@ -150,14 +138,12 @@ export default function StudentProfilePage() {
             ))}
           </div>
 
-          {/* Alerts */}
           {error   && <div style={{ padding: '10px 16px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, fontSize: 13.5, color: '#EF4444' }}>{error}</div>}
           {success && <div style={{ padding: '10px 16px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, fontSize: 13.5, color: '#10B981', display: 'flex', alignItems: 'center', gap: 7 }}><CheckCircle size={15} /> {success}</div>}
 
           {/* ── Profile Tab ── */}
           {activeTab === 'Profile' && (
             <>
-              {/* Hero card */}
               <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '24px 28px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, marginBottom: 24 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -204,12 +190,11 @@ export default function StudentProfilePage() {
                   </button>
                 </div>
 
-                {/* Stats */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 0, borderTop: '1px solid #F0F0F4', paddingTop: 20 }}>
                   {[
-                    { label: 'Overall Progress', value: '—',    color: '#7C3AED' },
-                    { label: 'Sessions Attended', value: profile?.sessions_count || 0,  color: '#10B981' },
-                    { label: 'Study Hours',        value: profile?.study_hours    || 0,  color: '#6366F1' },
+                    { label: 'Overall Progress',  value: '—',                              color: '#7C3AED' },
+                    { label: 'Sessions Attended', value: profile?.sessions_count || 0,     color: '#10B981' },
+                    { label: 'Study Hours',        value: profile?.study_hours    || 0,    color: '#6366F1' },
                   ].map(({ label, value, color }, i) => (
                     <div key={label} style={{ textAlign: 'center', borderRight: i < 2 ? '1px solid #F0F0F4' : 'none', padding: '0 16px' }}>
                       <div style={{ fontSize: 24, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
@@ -219,9 +204,7 @@ export default function StudentProfilePage() {
                 </div>
               </div>
 
-              {/* Two-column */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                {/* Education */}
                 <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '20px 22px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F3F0FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -230,7 +213,7 @@ export default function StudentProfilePage() {
                     <span style={{ fontWeight: 700, fontSize: 15 }}>Education</span>
                   </div>
                   {[
-                    { label: 'Course',     value: course  || '—' },
+                    { label: 'Program',    value: program || '—' },
                     { label: 'Year Level', value: year    || '—' },
                   ].map(({ label, value }) => (
                     <div key={label} className="info-row">
@@ -242,37 +225,18 @@ export default function StudentProfilePage() {
                   ))}
                 </div>
 
-                {/* Study Preferences */}
                 <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '20px 22px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <BookOpen size={15} color="#10B981" />
                     </div>
-                    <span style={{ fontWeight: 700, fontSize: 15 }}>Study Preferences</span>
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>About Me</span>
                   </div>
-                  {[
-                    { label: 'Study Style',     value: style    || '—' },
-                    { label: 'Study Goals',     value: goals    || '—' },
-                    { label: 'Preferred Days',  value: prefDays || '—' },
-                    { label: 'Preferred Time',  value: prefTime || '—' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="info-row">
-                      <div>
-                        <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 3 }}>{label}</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1E1B4B' }}>{value}</div>
-                      </div>
-                    </div>
-                  ))}
+                  <div style={{ fontSize: 14, color: bio ? '#1E1B4B' : '#9CA3AF', lineHeight: 1.6 }}>
+                    {bio || 'No bio set yet.'}
+                  </div>
                 </div>
               </div>
-
-              {/* Bio */}
-              {bio && (
-                <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '20px 22px' }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>About Me</div>
-                  <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, margin: 0 }}>{bio}</p>
-                </div>
-              )}
             </>
           )}
 
@@ -281,27 +245,20 @@ export default function StudentProfilePage() {
             <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '24px 28px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 {[
-                  { key: 'name',           label: 'Full Name',      type: 'text'  },
-                  { key: 'phone',          label: 'Phone Number',   type: 'text'  },
-                  { key: 'course',         label: 'Course',         type: 'text'  },
-                  { key: 'year_level',     label: 'Year Level',     type: 'text'  },
-                  { key: 'study_style',    label: 'Study Style',    type: 'text'  },
-                  { key: 'preferred_days', label: 'Preferred Days', type: 'text'  },
-                  { key: 'preferred_time', label: 'Preferred Time', type: 'text'  },
-                ].map(({ key, label, type }) => (
+                  { key: 'name',       label: 'Full Name'    },
+                  { key: 'phone',      label: 'Phone Number' },
+                  { key: 'program',    label: 'Program'      },
+                  { key: 'year_level', label: 'Year Level'   },
+                ].map(({ key, label }) => (
                   <div key={key}>
                     <label className="pp-label">{label}</label>
                     <input
-                      className="pp-input" type={type}
+                      className="pp-input"
                       value={form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
                       placeholder={label}
                     />
                   </div>
                 ))}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="pp-label">Study Goals</label>
-                  <input className="pp-input" value={form.study_goals} onChange={e => setForm(p => ({ ...p, study_goals: e.target.value }))} placeholder="Your study goals..." />
-                </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="pp-label">Bio</label>
                   <textarea
@@ -340,6 +297,9 @@ export default function StudentProfilePage() {
           {activeTab === 'Preferences' && (
             <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '24px 28px' }}>
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Study Preferences</div>
+              <p style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
+                These preferences help match you with the right tutors.
+              </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 {[
                   { key: 'study_style',    label: 'Study Style'    },
@@ -371,10 +331,10 @@ export default function StudentProfilePage() {
           <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '18px 20px' }}>
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>Account Info</div>
             {[
-              { icon: Mail,  label: 'Email',  value: email  || '—' },
-              { icon: Phone, label: 'Phone',  value: phone  || '—' },
-              { icon: GraduationCap, label: 'Course', value: course || '—' },
-              { icon: Calendar, label: 'Year',  value: year   || '—' },
+              { icon: Mail,          label: 'Email',   value: email   || '—' },
+              { icon: Phone,         label: 'Phone',   value: phone   || '—' },
+              { icon: GraduationCap, label: 'Program', value: program || '—' },
+              { icon: Calendar,      label: 'Year',    value: year    || '—' },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #F8F9FB' }}>
                 <div style={{ width: 30, height: 30, borderRadius: 8, background: '#F3F0FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

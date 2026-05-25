@@ -38,7 +38,11 @@ class AuthController extends Controller
         ]);
 
         if ($role === 'tutor') {
-            Tutor::create(['user_id' => $user->id]);
+            Tutor::create([
+                'user_id'             => $user->id,
+                'verification_status' => 'approved',
+                'verified_at'         => now(),
+            ]);
         } else {
             Student::create(['user_id' => $user->id]);
         }
@@ -55,7 +59,7 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        return response()->json([
+        $response = [
             'success' => true,
             'message' => 'Registration successful.',
             'data'    => [
@@ -65,7 +69,13 @@ class AuthController extends Controller
             ],
             'user'    => $user->load(['student', 'tutor']),
             'token'   => $token,
-        ], 201);
+        ];
+
+        if (app()->environment('local')) {
+            $response['debug_otp'] = $otp;
+        }
+
+        return response()->json($response, 201);
     }
 
     /**

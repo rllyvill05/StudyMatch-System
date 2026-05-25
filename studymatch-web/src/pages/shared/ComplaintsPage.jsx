@@ -31,7 +31,7 @@ export default function ComplaintsPage() {
     setLoading(true)
     try {
       const res  = await getMyComplaints()
-      const data = res?.data || res || []
+      const data = res?.complaints || res?.data || res || []
       setComplaints(Array.isArray(data) ? data : [])
     } catch {}
     finally { setLoading(false) }

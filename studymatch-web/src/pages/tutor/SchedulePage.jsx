@@ -1,10 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Plus,
   Filter, Calendar, Clock, Users, CheckCircle,
-  RefreshCw, Settings, ArrowRight,
+  RefreshCw, Settings, ArrowRight, Loader2,
 } from 'lucide-react'
+import { getSessions } from '../../api/sessions'
+
+const HOUR_START = 9
+const HOURS      = ['9 AM','10 AM','11 AM','12 PM','1 PM','2 PM','3 PM','4 PM','5 PM','6 PM','7 PM','8 PM']
+const STATUS_COLORS = {
+  scheduled: '#7C3AED',
+  completed: '#10B981',
+  cancelled: '#EF4444',
+}
 
 const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 
@@ -24,6 +33,15 @@ export default function TutorMySchedulePage() {
   const [activeView, setView]       = useState('Week View')
   const [weekOffset, setWeekOffset] = useState(0)
   const [miniMonth,  setMiniMonth]  = useState({ year: today.getFullYear(), month: today.getMonth() })
+  const [sessions,   setSessions]   = useState([])
+  const [loading,    setLoading]    = useState(true)
+
+  useEffect(() => {
+    getSessions()
+      .then(data => setSessions(Array.isArray(data?.data) ? data.data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   // Real week dates
   const weekStart = new Date(today)
@@ -122,15 +140,62 @@ export default function TutorMySchedulePage() {
               ))}
             </div>
 
-            {/* Empty state */}
-            <div style={{ padding: '48px 20px', textAlign: 'center' }}>
-              <Calendar size={32} color="#DDD6FE" style={{ margin: '0 auto 12px' }} />
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#374151', marginBottom: 6 }}>No sessions this week</div>
-              <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>Students can book sessions with you once you set your availability.</div>
-              <Link to="/tutor/find-students" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', background: '#7C3AED', color: 'white', borderRadius: 9, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
-                Find Students
-              </Link>
-            </div>
+            {/* Hour grid */}
+            {loading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                <Loader2 size={24} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} />
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', overflowX: 'auto' }}>
+                {/* Time gutter */}
+                <div style={{ width: 60, flexShrink: 0 }}>
+                  <div style={{ height: 32, borderBottom: '1px solid #F0F0F4' }} />
+                  {HOURS.map(h => (
+                    <div key={h} style={{ height: 56, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: 8, paddingTop: 4, fontSize: 10.5, color: '#9CA3AF', borderBottom: '1px solid #F8F9FB' }}>
+                      {h}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day columns */}
+                {weekDates.map((date, colIdx) => {
+                  const daySessions = sessions.filter(s => {
+                    if (!s.scheduled_at) return false
+                    return new Date(s.scheduled_at).toDateString() === date.toDateString()
+                  })
+                  return (
+                    <div key={colIdx} style={{ flex: 1, minWidth: 90, borderLeft: '1px solid #F0F0F4' }}>
+                      <div style={{ height: 32, borderBottom: '1px solid #F0F0F4' }} />
+                      <div style={{ position: 'relative' }}>
+                        {HOURS.map(h => (
+                          <div key={h} style={{ height: 56, borderBottom: '1px solid #F8F9FB' }} />
+                        ))}
+                        {daySessions.map(s => {
+                          const d    = new Date(s.scheduled_at)
+                          const off  = d.getHours() - HOUR_START
+                          if (off < 0 || off >= HOURS.length) return null
+                          const top    = off * 56 + (d.getMinutes() / 60) * 56
+                          const height = Math.max(((s.duration_minutes || 60) / 60) * 56, 22)
+                          const label  = s.subject?.name || s.notes || 'Session'
+                          const color  = STATUS_COLORS[s.status] || STATUS_COLORS.scheduled
+                          return (
+                            <div key={s.id} title={label} style={{
+                              position: 'absolute', top, left: 3, right: 3, height,
+                              background: color, borderRadius: 6, zIndex: 1,
+                              padding: '3px 6px', fontSize: 10.5, fontWeight: 700,
+                              color: 'white', overflow: 'hidden', cursor: 'default',
+                            }}>
+                              {label}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             <div style={{ borderTop: '1px solid #F0F0F4', padding: '14px 20px' }}>
               <button style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px', background: 'white', border: '1px solid #E5E7EB', borderRadius: 10, color: '#374151', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -166,12 +231,20 @@ export default function TutorMySchedulePage() {
           <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '18px 18px' }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 14 }}>Your Weekly Summary</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {[
-                { icon: Calendar,    color: '#7C3AED', bg: '#F3F0FF', value: 0, label: 'Sessions'        },
-                { icon: Clock,       color: '#F59E0B', bg: '#FFFBEB', value: 0, label: 'Hours'           },
-                { icon: Users,       color: '#6366F1', bg: '#EEF2FF', value: 0, label: 'Students'        },
-                { icon: CheckCircle, color: '#10B981', bg: '#F0FDF4', value: '—', label: 'Completion Rate' },
-              ].map(({ icon: Icon, color, bg, value, label }) => (
+              {(() => {
+                const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7)
+                const weekSess = sessions.filter(s => { const d = new Date(s.scheduled_at); return d >= weekStart && d < weekEnd })
+                const totalMin = weekSess.reduce((a, s) => a + (s.duration_minutes || 60), 0)
+                const uniqueStudents = new Set(weekSess.map(s => s.student_id)).size
+                const completed = weekSess.filter(s => s.status === 'completed').length
+                const rate = weekSess.length ? Math.round((completed / weekSess.length) * 100) + '%' : '—'
+                return [
+                  { icon: Calendar,    color: '#7C3AED', bg: '#F3F0FF', value: weekSess.length,              label: 'Sessions'        },
+                  { icon: Clock,       color: '#F59E0B', bg: '#FFFBEB', value: (totalMin / 60).toFixed(1),   label: 'Hours'           },
+                  { icon: Users,       color: '#6366F1', bg: '#EEF2FF', value: uniqueStudents,               label: 'Students'        },
+                  { icon: CheckCircle, color: '#10B981', bg: '#F0FDF4', value: rate,                         label: 'Completion Rate' },
+                ]
+              })().map(({ icon: Icon, color, bg, value, label }) => (
                 <div key={label} style={{ background: bg, borderRadius: 12, padding: '12px 10px', textAlign: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 5 }}><Icon size={16} color={color} /></div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#1E1B4B', lineHeight: 1 }}>{value}</div>

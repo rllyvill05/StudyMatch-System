@@ -30,8 +30,6 @@ export default function LoginPage() {
       )
 
       const user = res.data.user
-      console.log('USER:', user)
-      console.log('ROLE:', user.role)
 
       if (user.role === 'admin') {
         navigate('/admin/dashboard')

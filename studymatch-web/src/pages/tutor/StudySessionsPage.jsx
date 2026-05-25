@@ -1,12 +1,58 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
-  Plus, Filter, ChevronLeft, ChevronRight,
+  Filter, ChevronLeft, ChevronRight,
   Calendar, Clock, Video, Users, Star,
   BookOpen, ArrowRight, ChevronRight as CR,
+  Loader2,
 } from 'lucide-react'
+import { getSessions } from '../../api/sessions'
 
-const TABS     = ['Upcoming', 'Completed', 'Cancelled', 'All Sessions', 'Assignments']
+const TABS     = ['Upcoming', 'Completed', 'Cancelled', 'All Sessions']
 const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+
+const STATUS_COLORS = {
+  scheduled: { bg: '#EEF2FF', text: '#6366F1' },
+  completed: { bg: '#F0FDF4', text: '#10B981' },
+  cancelled: { bg: '#FEF2F2', text: '#EF4444' },
+}
+
+function SessionCard({ session }) {
+  const sc = STATUS_COLORS[session.status] || STATUS_COLORS.scheduled
+  const studentName = session.student?.user?.name || 'Student'
+  const subject     = session.subject?.name || session.notes || 'Study Session'
+  const dt = session.scheduled_at
+    ? new Date(session.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : '—'
+
+  return (
+    <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 14, padding: '16px 18px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+      <div style={{ width: 42, height: 42, borderRadius: 11, background: '#F3F0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <BookOpen size={18} color="#7C3AED" />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: '#1E1B4B' }}>{subject}</span>
+          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: sc.bg, color: sc.text, textTransform: 'capitalize' }}>{session.status}</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: '#6B7280', marginBottom: 6 }}>Student: {studentName}</div>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#9CA3AF' }}>
+            <Calendar size={13} /> {dt}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#9CA3AF' }}>
+            <Clock size={13} /> {session.duration_minutes || 60} min
+          </span>
+          {session.session_link && (
+            <a href={session.session_link} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#7C3AED', fontWeight: 600, textDecoration: 'none' }}>
+              <Video size={13} /> Join
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function buildCalendar(year, month) {
   const first = new Date(year, month, 1).getDay()
@@ -23,12 +69,37 @@ export default function TutorStudySessionsPage() {
   const today = new Date()
   const [activeTab, setActiveTab] = useState('Upcoming')
   const [miniMonth, setMiniMonth] = useState({ year: today.getFullYear(), month: today.getMonth() })
+  const [sessions, setSessions]   = useState([])
+  const [loading,  setLoading]    = useState(true)
+
+  useEffect(() => {
+    getSessions()
+      .then(data => setSessions(Array.isArray(data?.data) ? data.data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   const calCells   = buildCalendar(miniMonth.year, miniMonth.month)
   const monthLabel = new Date(miniMonth.year, miniMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   const prevMonth = () => setMiniMonth(p => p.month === 0  ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 })
   const nextMonth = () => setMiniMonth(p => p.month === 11 ? { year: p.year + 1, month: 0  } : { ...p, month: p.month + 1 })
+
+  const now = new Date()
+  const todayStr = today.toDateString()
+  const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7)
+
+  const filtered = sessions.filter(s => {
+    const d = new Date(s.scheduled_at)
+    if (activeTab === 'Upcoming')  return s.status === 'scheduled' && d >= now
+    if (activeTab === 'Completed') return s.status === 'completed'
+    if (activeTab === 'Cancelled') return s.status === 'cancelled'
+    return true
+  })
+  const todaySessions   = sessions.filter(s => new Date(s.scheduled_at).toDateString() === todayStr)
+  const thisWeekSessions = sessions.filter(s => { const d = new Date(s.scheduled_at); return d >= now && d < weekEnd })
+  const thisWeekHours   = thisWeekSessions.reduce((sum, s) => sum + (s.duration_minutes || 60), 0)
+  const uniqueStudents  = new Set(thisWeekSessions.map(s => s.student_id)).size
 
   return (
     <>
@@ -50,6 +121,7 @@ export default function TutorStudySessionsPage() {
         .qa-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #F8F9FB; cursor: pointer; color: #1E1B4B; }
         .qa-row:last-child { border-bottom: none; }
         .qa-row:hover { color: #7C3AED; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       <div className="tss-wrap">
@@ -69,60 +141,37 @@ export default function TutorStudySessionsPage() {
                 </button>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: 10, paddingBottom: 2 }}>
-              <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', border: '1px solid #E5E7EB', borderRadius: 9, background: 'white', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                <Filter size={14} color="#7C3AED" /> Filter
-              </button>
-              <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#6D28D9'}
-                onMouseLeave={e => e.currentTarget.style.background = '#7C3AED'}
-              >
-                <Plus size={15} /> New Session
-              </button>
-            </div>
           </div>
 
-          {/* Assignments summary */}
-          <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: '#F3F0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <BookOpen size={20} color="#7C3AED" />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#1E1B4B', marginBottom: 2 }}>Assignments</div>
-              <div style={{ fontSize: 12.5, color: '#9CA3AF' }}>All session assignments in one place.</div>
-            </div>
-            <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-              {[{ value: 0, label: 'To Review', color: '#7C3AED' }, { value: 0, label: 'Graded', color: '#10B981' }, { value: 0, label: 'Late', color: '#F59E0B' }, { value: 0, label: 'Returned', color: '#6B7280' }].map(({ value, label, color }) => (
-                <div key={label} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-                  <div style={{ fontSize: 11.5, color: '#9CA3AF', fontWeight: 500, marginTop: 3 }}>{label}</div>
-                </div>
-              ))}
-            </div>
-            <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: 'white', border: '1.5px solid #7C3AED', borderRadius: 9, color: '#7C3AED', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-              View All <ArrowRight size={13} />
-            </button>
-          </div>
-
-          {/* Empty state */}
+          {/* Sessions list */}
           <div>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 14 }}>
-              {activeTab === 'Upcoming' ? 'Upcoming Sessions' : activeTab === 'Completed' ? 'Completed Sessions' : 'Sessions'}
+              {activeTab} Sessions
             </div>
-            <div style={{ background: '#F8F9FB', border: '1px dashed #DDD6FE', borderRadius: 14, padding: '48px 20px', textAlign: 'center' }}>
-              <Calendar size={32} color="#DDD6FE" style={{ margin: '0 auto 12px' }} />
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#374151', marginBottom: 6 }}>
-                {activeTab === 'Upcoming' ? 'No upcoming sessions' : activeTab === 'Completed' ? 'No completed sessions yet' : 'No sessions found'}
+            {loading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+                <Loader2 size={28} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} />
               </div>
-              <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
-                {activeTab === 'Upcoming' ? 'Match with students to start booking sessions.' : 'Sessions will appear here once completed.'}
+            ) : filtered.length === 0 ? (
+              <div style={{ background: '#F8F9FB', border: '1px dashed #DDD6FE', borderRadius: 14, padding: '48px 20px', textAlign: 'center' }}>
+                <Calendar size={32} color="#DDD6FE" style={{ margin: '0 auto 12px' }} />
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#374151', marginBottom: 6 }}>
+                  {activeTab === 'Upcoming' ? 'No upcoming sessions' : activeTab === 'Completed' ? 'No completed sessions yet' : 'No sessions found'}
+                </div>
+                <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
+                  {activeTab === 'Upcoming' ? 'Students will book sessions with you once matched.' : 'Sessions will appear here.'}
+                </div>
+                {activeTab === 'Upcoming' && (
+                  <a href="/tutor/find-students" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', background: '#7C3AED', color: 'white', borderRadius: 9, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                    Find Students
+                  </a>
+                )}
               </div>
-              {activeTab === 'Upcoming' && (
-                <a href="/tutor/find-students" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', background: '#7C3AED', color: 'white', borderRadius: 9, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
-                  Find Students
-                </a>
-              )}
-            </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {filtered.map(s => <SessionCard key={s.id} session={s} />)}
+              </div>
+            )}
           </div>
         </div>
 
@@ -156,10 +205,23 @@ export default function TutorStudySessionsPage() {
           {/* Today's Schedule */}
           <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '18px 18px' }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 14 }}>Today's Schedule</div>
-            <div style={{ padding: '12px 0', textAlign: 'center' }}>
-              <Calendar size={24} color="#DDD6FE" style={{ margin: '0 auto 8px' }} />
-              <div style={{ fontSize: 13, color: '#9CA3AF' }}>No sessions today</div>
-            </div>
+            {todaySessions.length === 0 ? (
+              <div style={{ padding: '12px 0', textAlign: 'center' }}>
+                <Calendar size={24} color="#DDD6FE" style={{ margin: '0 auto 8px' }} />
+                <div style={{ fontSize: 13, color: '#9CA3AF' }}>No sessions today</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {todaySessions.map(s => (
+                  <div key={s.id} style={{ padding: '10px 12px', background: '#F8F9FB', borderRadius: 10 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12.5, color: '#1E1B4B' }}>{s.subject?.name || 'Study Session'}</div>
+                    <div style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 2 }}>
+                      {new Date(s.scheduled_at).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })} · {s.student?.user?.name || 'Student'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* This Week Overview */}
@@ -167,10 +229,10 @@ export default function TutorStudySessionsPage() {
             <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 14 }}>This Week Overview</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {[
-                { icon: Calendar, color: '#7C3AED', bg: '#F3F0FF', value: 0,   label: 'Sessions'    },
-                { icon: Users,    color: '#6366F1', bg: '#EEF2FF', value: 0,   label: 'Students'    },
-                { icon: Clock,    color: '#F59E0B', bg: '#FFFBEB', value: 0,   label: 'Hours'       },
-                { icon: Star,     color: '#10B981', bg: '#F0FDF4', value: '—', label: 'Avg. Rating' },
+                { icon: Calendar, color: '#7C3AED', bg: '#F3F0FF', value: thisWeekSessions.length,              label: 'Sessions' },
+                { icon: Users,    color: '#6366F1', bg: '#EEF2FF', value: uniqueStudents,                        label: 'Students' },
+                { icon: Clock,    color: '#F59E0B', bg: '#FFFBEB', value: Math.round(thisWeekHours / 60 * 10) / 10 + 'h', label: 'Hours'    },
+                { icon: Star,     color: '#10B981', bg: '#F0FDF4', value: '—',                                   label: 'Avg. Rating' },
               ].map(({ icon: Icon, color, bg, value, label }) => (
                 <div key={label} style={{ background: bg, borderRadius: 12, padding: '12px 10px', textAlign: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 5 }}><Icon size={16} color={color} /></div>

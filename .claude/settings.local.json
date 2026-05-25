@@ -50,7 +50,14 @@
       "Bash(git -C C:/Project/StudyMatch-System status --short)",
       "Bash(git -C C:/Project/StudyMatch-System commit -m \"add all sub-projects as regular folders for team access\")",
       "Bash(git -C C:/Project/StudyMatch-System push)",
-      "Bash(git -C C:/Project/StudyMatch-System push --set-upstream origin main)"
+      "Bash(git -C C:/Project/StudyMatch-System push --set-upstream origin main)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Project\\\\StudyMatch-System\\\\studymatch-web\" -Recurse -Depth 3)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Get-Content \"c:\\\\Project\\\\StudyMatch-System\\\\studymatch-api\\\\storage\\\\logs\\\\laravel.log\" -Tail 60)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Project\\\\StudyMatch-System\\\\studymatchadmin\\\\src\" -Recurse -Name)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Project\\\\StudyMatch-System\\\\studymatchadmin\\\\src\\\\pages\" -Name)",
+      "Bash(Get-ChildItem -Recurse -Path \"c:\\\\Project\\\\StudyMatch-System\\\\studymatch-web\\\\src\\\\\" -Directory | Select-Object -ExpandProperty FullName | Sort-Object)"
     ]
   }
 }

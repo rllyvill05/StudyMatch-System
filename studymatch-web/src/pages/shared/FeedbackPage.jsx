@@ -40,7 +40,7 @@ export default function FeedbackPage() {
     setLoading(true)
     try {
       const res  = await getMyFeedback()
-      const data = res?.data || res || []
+      const data = res?.feedback || res?.data || res || []
       setFeedbacks(Array.isArray(data) ? data : [])
     } catch {}
     finally { setLoading(false) }

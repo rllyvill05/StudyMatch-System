@@ -106,7 +106,7 @@ export default function TutorResourcesPage() {
     setLoading(true); setError('')
     try {
       const res  = await getResources()
-      const data = res?.data || res || []
+      const data = res?.data?.data || res?.data || []
       setResources(Array.isArray(data) ? data : [])
     } catch { setError('Failed to load resources.') }
     finally { setLoading(false) }

@@ -71,9 +71,19 @@ export const updatePassword = async (passwordData) => {
   }
 };
 
-export const deleteAccount = async () => {
+export const completeProfile = async (data = {}) => {
   try {
-    const response = await api.delete('/profile/delete-account');
+    const response = await api.post('/profile/complete', data);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to complete profile:', error);
+    throw error;
+  }
+};
+
+export const deleteAccount = async (password) => {
+  try {
+    const response = await api.delete('/profile/delete-account', { data: { password } });
     return response.data;
   } catch (error) {
     console.error('Failed to delete account:', error);

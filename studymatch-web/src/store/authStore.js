@@ -2,8 +2,13 @@ export const getToken = () =>
   localStorage.getItem('user_token')
 
 export const getUser = () => {
-  const user = localStorage.getItem('user_data')
-  return user ? JSON.parse(user) : null
+  try {
+    const user = localStorage.getItem('user_data')
+    return user ? JSON.parse(user) : null
+  } catch {
+    localStorage.removeItem('user_data')
+    return null
+  }
 }
 
 export const saveAuth = (token, user) => {

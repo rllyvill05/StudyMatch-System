@@ -50,6 +50,7 @@ import PrivacyPage           from './pages/shared/PrivacyPage'
 
 // ── Admin pages ──
 import AdminDashboard      from './pages/admin/DashboardPage'
+import AdminComplaintsPage from './pages/admin/ComplaintsPage'
 import ManageAnnouncements from './pages/admin/ManageAnnouncementsPage'
 import ReportsPage         from './pages/admin/ReportsPage'
 import AdminResources      from './pages/admin/ResourcesPage'
@@ -172,6 +173,7 @@ const router = createBrowserRouter([
       { index: true,           element: <Navigate to="dashboard" replace /> },
       { path: 'dashboard',     element: <AdminDashboard />      },
       { path: 'announcements', element: <ManageAnnouncements /> },
+      { path: 'complaints',    element: <AdminComplaintsPage /> },
       { path: 'reports',       element: <ReportsPage />         },
       { path: 'resources',     element: <AdminResources />      },
       { path: 'settings',      element: <AdminSettings />       },

@@ -13,7 +13,7 @@ export const getMyFeedback = async () => {
 export const submitFeedback = async (type, message, rating) => {
   try {
     const response = await api.post('/feedback/submit', {
-      type,
+      category: type,
       message,
       rating
     });

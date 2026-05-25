@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { register, sendOtp, verifyOtp } from '../../api/auth'
 import { saveAuth } from '../../store/authStore'
+import { updateProfileStep1, updateProfileStep2, completeProfile } from '../../api/profile'
 import {
   User, Mail, Lock, Eye, EyeOff, GraduationCap, Check,
   Zap, Monitor, MapPin, Globe, Sun, Coffee, Moon, Users,
@@ -107,6 +108,30 @@ export default function RegisterPage() {
   const handleBack=()=>{ setError('');if(step===1)setStep(0);else setStep(s=>s-1) }
   const handleResend=async()=>{ if(resendTimer>0)return;setError('');setLoading(true);try{await sendOtp({email:formData.email});setResendTimer(60);setOtp(['','','','','','']);otpRefs.current[0]?.focus()}catch(e){setError(e.response?.data?.message||'Failed to resend.')}finally{setLoading(false)} }
 
+  const YEAR_MAP = {'1st Year':'1st','2nd Year':'2nd','3rd Year':'3rd','4th Year':'4th','5th Year':'5th','Graduate':'5th'}
+
+  const handleStudentFinish = async () => {
+    setLoading(true)
+    try {
+      await updateProfileStep1({ name: formData.name, bio })
+      await updateProfileStep2({ program: course, year_level: YEAR_MAP[yearLevel] || null })
+      await completeProfile()
+    } catch(e) {}
+    finally { setLoading(false) }
+    navigate('/student/dashboard')
+  }
+
+  const handleTutorSubmit = async () => {
+    if (!tOk) return
+    setLoading(true)
+    try {
+      await updateProfileStep2({ position: tPos, employee_id: tEmpId, specialization: tDept })
+      await completeProfile()
+    } catch(e) {}
+    finally { setLoading(false) }
+    setStep(6)
+  }
+
   const steps=role==='tutor'?TUTOR_STEPS:STUDENT_STEPS
   const isWide=role==='tutor'&&step>=3&&step<=5
   const isMedium=role==='student'&&step===3
@@ -211,16 +236,16 @@ export default function RegisterPage() {
           <div style={{ position:'relative',zIndex:10,width:440,background:'rgba(8,6,24,0.6)',border:'1px solid rgba(120,90,240,0.22)',borderRadius:24,backdropFilter:'blur(24px)',padding:36,display:'flex',flexDirection:'column',alignItems:'center',gap:16,textAlign:'center',fontFamily:'Poppins,sans-serif',color:'#ddd8ff' }}>
             <div style={{ display:'flex',gap:6,justifyContent:'center' }}>{['#7c5cfa','#fbbf24','#4ade80','#f472b6'].map((c,i)=><div key={i} style={{ width:7,height:7,borderRadius:'50%',background:c,opacity:0.7 }}/>)}</div>
             <div style={{ width:72,height:72,borderRadius:'50%',background:'rgba(124,92,250,0.15)',border:'2px solid rgba(124,92,250,0.35)',display:'flex',alignItems:'center',justifyContent:'center',color:'#7c5cfa' }}><Check size={32}/></div>
-            <div style={{ fontSize:20,fontWeight:700,color:'#eae6ff' }}>Application Submitted!</div>
-            <div style={{ fontSize:13,color:'rgba(255,255,255,0.35)',lineHeight:1.7 }}>Thank you for applying to become a tutor.<br/>Your application is now under review by our school.</div>
+            <div style={{ fontSize:20,fontWeight:700,color:'#eae6ff' }}>You're all set!</div>
+            <div style={{ fontSize:13,color:'rgba(255,255,255,0.35)',lineHeight:1.7 }}>Your tutor profile has been created and is now active.<br/>Students can find and send you requests right away.</div>
             <div style={{ background:'rgba(255,255,255,0.03)',border:'1px solid rgba(120,90,240,0.15)',borderRadius:12,padding:'14px 18px',width:'100%',textAlign:'left' }}>
               <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10 }}>
                 <span style={{ fontSize:13,fontWeight:600,color:'#ddd8ff' }}>Status</span>
-                <span style={{ display:'inline-flex',alignItems:'center',gap:6,padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:700,background:'rgba(234,179,8,0.12)',border:'1px solid rgba(234,179,8,0.3)',color:'#fbbf24' }}>Pending Review</span>
+                <span style={{ display:'inline-flex',alignItems:'center',gap:6,padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:700,background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',color:'#4ade80' }}>Active</span>
               </div>
-              <div style={{ fontSize:12,color:'rgba(255,255,255,0.38)',lineHeight:1.7 }}>You will receive an email notification once reviewed.<br/><span style={{ color:'rgba(255,255,255,0.25)' }}>Estimated review time: 1-3 business days</span></div>
+              <div style={{ fontSize:12,color:'rgba(255,255,255,0.38)',lineHeight:1.7 }}>Complete your profile to attract more students.<br/><span style={{ color:'rgba(255,255,255,0.25)' }}>Add your subjects, availability, and bio from your dashboard.</span></div>
             </div>
-            <button style={{ width:'100%',padding:13,background:'linear-gradient(135deg,#7c5cfa,#5738d0)',color:'#fff',border:'none',borderRadius:11,fontSize:14,fontWeight:600,fontFamily:'Poppins,sans-serif',cursor:'pointer' }} onClick={()=>navigate('/')}>Back to Home</button>
+            <button style={{ width:'100%',padding:13,background:'linear-gradient(135deg,#7c5cfa,#5738d0)',color:'#fff',border:'none',borderRadius:11,fontSize:14,fontWeight:600,fontFamily:'Poppins,sans-serif',cursor:'pointer' }} onClick={()=>navigate('/tutor/dashboard')}>Go to Dashboard</button>
           </div>
         )}
 
@@ -288,7 +313,7 @@ export default function RegisterPage() {
               {step===2&&(
                 <>
                   <div className="rp-otp-hint">We sent a 6-digit code to<br/><strong>{formData.email}</strong></div>
-                  <div className="rp-otp-boxes" onPaste={hotpP}>{otp.map((d,i)=><input key={i} ref={el=>otpRefs.current[i]=el} className={`rp-otp-box${d?' f':''}`} type="text" inputMode="numeric" maxLength={1} value={d} onChange={e=>hotp(i,e.target.value)} onKeyDown={e=>hotpK(i,e)}/>)}</div>
+<div className="rp-otp-boxes" onPaste={hotpP}>{otp.map((d,i)=><input key={i} ref={el=>otpRefs.current[i]=el} className={`rp-otp-box${d?' f':''}`} type="text" inputMode="numeric" maxLength={1} value={d} onChange={e=>hotp(i,e.target.value)} onKeyDown={e=>hotpK(i,e)}/>)}</div>
                   <div className="rp-resend">Didn't receive it?<button className={resendTimer>0?'no':'can'} onClick={handleResend} disabled={resendTimer>0||loading}>{resendTimer>0?`Resend in ${resendTimer}s`:'Resend code'}</button></div>
                 </>
               )}
@@ -379,7 +404,7 @@ export default function RegisterPage() {
                     <div style={{ fontSize:13,fontWeight:700,color:'#eae6ff' }}>Teaching Details</div>
                     <div className="fm-grp"><label className="fm-lbl">Subjects</label><div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>{tSubs.map(s=><Tag key={s} label={s} onRemove={()=>setTSubs(tSubs.filter(v=>v!==s))}/>)}<button className="add-tag-btn" onClick={()=>setTAddSubs(!tAddSubs)}>+ Add</button></div>{tAddSubs&&<div className="sd-picker">{TUTOR_SUBJECTS.filter(s=>!tSubs.includes(s)).map(s=><button key={s} className="sd-pi" onClick={()=>{setTSubs([...tSubs,s]);setTAddSubs(false)}}>{s}</button>)}</div>}</div>
                     <div className="fm-grp"><label className="fm-lbl">Grade Levels Taught</label>{GRADE_LEVELS.map(g=><button key={g} className={`grade-btn${tGrades.includes(g)?' on':''}`} onClick={()=>tog(tGrades,setTGrades,g)}><div style={{ width:13,height:13,borderRadius:3,border:`1.5px solid ${tGrades.includes(g)?'#7c5cfa':'rgba(255,255,255,0.2)'}`,background:tGrades.includes(g)?'#7c5cfa':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>{tGrades.includes(g)&&<Check size={8} color="#fff"/>}</div>{g}</button>)}</div>
-                    <div className="fm-grp"><label className="fm-lbl">Teaching Style</label><select className="fm-sel" value={tStyle} onChange={e=>setTStyle(e.target.value)} style={{ backgroundImage:svgArrow,backgroundRepeat:'no-repeat',backgroundPosition:'right 9px center' }}><option value="">Select approach</option>{TEACHING_STYLES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+                    <div className="fm-grp"><label className="fm-lbl">Teaching Style</label><select className="fm-sel" value={tStyle} onChange={e=>setTStyle(e.target.value)} style={{ backgroundImage:svgArrow,backgroundRepeat:'no-repeat',backgroundPosition:'right 9px center' }}><option value="">Select approach</option>{TUTORING_STYLES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
                     <div className="fm-grp"><label className="fm-lbl">Teaching Mode</label><div className="mode-row">{['Onsite','Online','Both'].map(m=><button key={m} className={`mode-btn${tMode===m?' on':''}`} onClick={()=>setTMode(m)}>{m}</button>)}</div></div>
                     <div style={{ fontSize:13,fontWeight:700,color:'#eae6ff',marginTop:4 }}>Consultation Hours</div>
                     <div className="fm-grp"><label className="fm-lbl">Days</label><div className="day-row">{DAYS.map(d=><button key={d} className={`day-btn${tDays.includes(d)?' on':''}`} onClick={()=>tog(tDays,setTDays,d)}>{d.slice(0,3)}</button>)}</div></div>
@@ -418,9 +443,9 @@ export default function RegisterPage() {
               {step===1&&(<><div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleNext} disabled={loading}>{loading?'Creating...':'Next'}</button></div><div className="rp-link">Already have an account? <NavLink to="/login">Log in</NavLink></div></>)}
               {step===2&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleNext} disabled={loading}>{loading?'Verifying...':'Verify'}</button></div>}
               {role==='student'&&step===3&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleNext}>Next</button></div>}
-              {role==='student'&&step===4&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={()=>navigate('/student/dashboard')}>Create account</button></div>}
+              {role==='student'&&step===4&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleStudentFinish} disabled={loading}>{loading?'Finishing...':'Create account'}</button></div>}
               {role==='tutor'&&(step===3||step===4)&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleNext}>Next</button></div>}
-              {role==='tutor'&&step===5&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={()=>setStep(6)} disabled={!tOk}><Send size={14}/>Submit Application</button></div>}
+              {role==='tutor'&&step===5&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleTutorSubmit} disabled={!tOk||loading}>{loading?'Submitting...':'Submit Application'}</button></div>}
             </div>
           </div>
         )}

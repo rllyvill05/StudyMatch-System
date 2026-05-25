@@ -97,6 +97,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sessions', [SessionController::class, 'index']);
     Route::get('/sessions/{id}', [SessionController::class, 'show']);
     Route::post('/sessions', [SessionController::class, 'store']);
+    Route::post('/sessions/{id}/accept', [SessionController::class, 'accept']);
+    Route::post('/sessions/{id}/decline', [SessionController::class, 'decline']);
     Route::put('/sessions/{id}', [SessionController::class, 'update']);
     Route::delete('/sessions/{id}', [SessionController::class, 'cancel']);
 

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ChevronLeft, ChevronRight, Plus,
   Calendar, Users, User, Clock,
-  MapPin, Video, List,
+  Video, List, BookOpen, Loader2,
 } from 'lucide-react'
+import { getSessions } from '../../api/sessions'
 
 /* ─── constants ─────────────────────────────────────────────── */
 
@@ -55,37 +56,85 @@ function EmptyState({ message = 'No sessions found.' }) {
   )
 }
 
+/* ─── session card (list) ────────────────────────────────────── */
+
+const STATUS_COLORS = {
+  scheduled: { bg: '#EEF2FF', text: '#6366F1' },
+  completed: { bg: '#F0FDF4', text: '#10B981' },
+  cancelled: { bg: '#FEF2F2', text: '#EF4444' },
+}
+
+function SessionRow({ session }) {
+  const sc = STATUS_COLORS[session.status] || STATUS_COLORS.scheduled
+  const tutorName = session.tutor?.user?.name || 'Tutor'
+  const subject   = session.subject?.name || session.notes || 'Study Session'
+  const dt = session.scheduled_at
+    ? new Date(session.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : '—'
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: '1px solid #F8F9FB' }}>
+      <div style={{ width: 38, height: 38, borderRadius: 10, background: '#F3F0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <BookOpen size={16} color="#7C3AED" />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1E1B4B', display: 'flex', alignItems: 'center', gap: 6 }}>
+          {subject}
+          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: sc.bg, color: sc.text, textTransform: 'capitalize' }}>{session.status}</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: '#9CA3AF', marginTop: 2 }}>
+          with {tutorName} · {dt} · {session.duration_minutes || 60} min
+        </div>
+      </div>
+      {session.session_link && (
+        <a href={session.session_link} target="_blank" rel="noopener noreferrer"
+          style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#7C3AED', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
+          <Video size={13} /> Join
+        </a>
+      )}
+    </div>
+  )
+}
+
 /* ─── list view ──────────────────────────────────────────────── */
 
 const LIST_TABS = ['Upcoming', 'Completed', 'All Sessions']
 
-function ListView() {
+function ListView({ sessions }) {
   const [listTab, setListTab] = useState('Upcoming')
+  const now = new Date()
+
+  const filtered = sessions.filter(s => {
+    if (listTab === 'Upcoming')   return s.status === 'scheduled' && new Date(s.scheduled_at) >= now
+    if (listTab === 'Completed')  return s.status === 'completed'
+    return true
+  })
 
   return (
     <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, overflow: 'hidden' }}>
-      {/* Sub-tabs */}
       <div style={{ display: 'flex', gap: 20, padding: '14px 20px', borderBottom: '1px solid #F0F0F4' }}>
         {LIST_TABS.map(t => (
           <button key={t} onClick={() => setListTab(t)} style={{
             padding: '6px 2px', fontSize: 13.5, fontWeight: 600,
             color: listTab === t ? '#7C3AED' : '#9CA3AF',
             border: 'none', borderBottom: `2px solid ${listTab === t ? '#7C3AED' : 'transparent'}`,
-            background: 'none', cursor: 'pointer', fontFamily: 'inherit',
-            transition: 'color .15s',
+            background: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .15s',
           }}>
             {t}
           </button>
         ))}
       </div>
-
-      {/* Content — always empty until API exists */}
-      <div style={{ padding: '20px' }}>
-        <EmptyState message={
-          listTab === 'Upcoming'  ? 'No upcoming sessions' :
-          listTab === 'Completed' ? 'No completed sessions yet' :
-          'No sessions found'
-        } />
+      <div style={{ padding: '0 20px 8px' }}>
+        {filtered.length === 0 ? (
+          <div style={{ padding: '20px 0' }}>
+            <EmptyState message={
+              listTab === 'Upcoming'  ? 'No upcoming sessions' :
+              listTab === 'Completed' ? 'No completed sessions yet' : 'No sessions found'
+            } />
+          </div>
+        ) : (
+          filtered.map(s => <SessionRow key={s.id} session={s} />)
+        )}
       </div>
     </div>
   )
@@ -102,6 +151,15 @@ export default function MySchedulePage() {
     year:  today.getFullYear(),
     month: today.getMonth(),
   })
+  const [sessions, setSessions] = useState([])
+  const [loading,  setLoading]  = useState(true)
+
+  useEffect(() => {
+    getSessions()
+      .then(data => setSessions(Array.isArray(data?.data) ? data.data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   // Week dates starting from Sunday
   const weekStart = new Date(today)
@@ -126,6 +184,16 @@ export default function MySchedulePage() {
     date.getDate()     === today.getDate()  &&
     date.getMonth()    === today.getMonth() &&
     date.getFullYear() === today.getFullYear()
+
+  const now = new Date()
+  const upcomingSessions = sessions.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at) >= now)
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7)
+  const thisWeekSessions = sessions.filter(s => {
+    const d = new Date(s.scheduled_at)
+    return d >= weekStart && d < weekEnd
+  })
+  // days with sessions (for marking in week view)
+  const sessionDays = new Set(sessions.map(s => new Date(s.scheduled_at).toDateString()))
 
   return (
     <>
@@ -168,6 +236,7 @@ export default function MySchedulePage() {
           padding: 10px 0; border-bottom: 1px solid #F8F9FB; font-size: 13.5px;
         }
         .sum-row:last-child { border-bottom: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       <div className="sch-wrap">
@@ -238,6 +307,10 @@ export default function MySchedulePage() {
                   {/* Day columns */}
                   {weekDates.map((date, colIdx) => {
                     const todayCol = isToday(date)
+                    const daySessions = sessions.filter(s => {
+                      if (!s.scheduled_at) return false
+                      return new Date(s.scheduled_at).toDateString() === date.toDateString()
+                    })
                     return (
                       <div key={colIdx} style={{ flex: 1, minWidth: 100, borderLeft: '1px solid #F0F0F4' }}>
                         <div style={{ height: 56, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, borderBottom: '1px solid #F0F0F4' }}>
@@ -257,6 +330,28 @@ export default function MySchedulePage() {
                           {HOURS.map(h => (
                             <div key={h} style={{ height: 56, borderBottom: '1px solid #F8F9FB' }} />
                           ))}
+                          {daySessions.map(s => {
+                            const d    = new Date(s.scheduled_at)
+                            const hour = d.getHours()
+                            const min  = d.getMinutes()
+                            const off  = hour - HOUR_START
+                            if (off < 0 || off >= HOURS.length) return null
+                            const top    = off * 56 + (min / 60) * 56
+                            const height = Math.max(((s.duration_minutes || 60) / 60) * 56, 22)
+                            const label  = s.subject?.name || s.notes || 'Session'
+                            const SC     = STATUS_COLORS[s.status] || STATUS_COLORS.scheduled
+                            return (
+                              <div key={s.id} title={label} style={{
+                                position: 'absolute', top, left: 3, right: 3, height,
+                                background: SC.text, borderRadius: 6,
+                                padding: '3px 6px', fontSize: 10.5, fontWeight: 700,
+                                color: 'white', overflow: 'hidden', zIndex: 1,
+                                cursor: 'default',
+                              }}>
+                                {label}
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )
@@ -272,13 +367,41 @@ export default function MySchedulePage() {
                     View All Sessions
                   </Link>
                 </div>
-                <EmptyState message="No upcoming sessions" />
+                {loading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+                    <Loader2 size={24} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} />
+                  </div>
+                ) : upcomingSessions.length === 0 ? (
+                  <EmptyState message="No upcoming sessions" />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {upcomingSessions.slice(0, 5).map(s => (
+                      <div key={s.id} style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#F3F0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <BookOpen size={17} color="#7C3AED" />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1E1B4B' }}>{s.subject?.name || s.notes || 'Study Session'}</div>
+                          <div style={{ fontSize: 12.5, color: '#9CA3AF', marginTop: 2 }}>
+                            with {s.tutor?.user?.name || 'Tutor'} · {new Date(s.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </div>
+                        </div>
+                        {s.session_link && (
+                          <a href={s.session_link} target="_blank" rel="noopener noreferrer"
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#7C3AED', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
+                            <Video size={13} /> Join
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
 
           {/* ── List View ── */}
-          {calView === 'list' && <ListView />}
+          {calView === 'list' && <ListView sessions={sessions} />}
 
         </div>
 
@@ -291,10 +414,23 @@ export default function MySchedulePage() {
               <span style={{ fontWeight: 700, fontSize: 14, color: '#1E1B4B' }}>Upcoming This Week</span>
               <Link to="/student/study-sessions" style={{ color: '#7C3AED', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>View All</Link>
             </div>
-            <div style={{ padding: '16px 0', textAlign: 'center' }}>
-              <Calendar size={24} color="#DDD6FE" style={{ margin: '0 auto 8px' }} />
-              <div style={{ fontSize: 13, color: '#9CA3AF' }}>No sessions this week</div>
-            </div>
+            {thisWeekSessions.length === 0 ? (
+              <div style={{ padding: '16px 0', textAlign: 'center' }}>
+                <Calendar size={24} color="#DDD6FE" style={{ margin: '0 auto 8px' }} />
+                <div style={{ fontSize: 13, color: '#9CA3AF' }}>No sessions this week</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {thisWeekSessions.map(s => (
+                  <div key={s.id} style={{ padding: '10px 12px', background: '#F8F9FB', borderRadius: 10 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12.5, color: '#1E1B4B' }}>{s.subject?.name || 'Study Session'}</div>
+                    <div style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 2 }}>
+                      {new Date(s.scheduled_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Mini calendar */}
@@ -332,10 +468,10 @@ export default function MySchedulePage() {
           <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '18px 18px' }}>
             <div style={{ fontWeight: 700, fontSize: 14, color: '#1E1B4B', marginBottom: 12 }}>Schedule Summary</div>
             {[
-              { icon: Calendar, label: 'Total Sessions', value: 0, color: '#7C3AED' },
-              { icon: Clock,    label: 'This Week',      value: 0, color: '#6366F1' },
-              { icon: Users,    label: 'Study Groups',   value: 0, color: '#10B981' },
-              { icon: User,     label: 'One-on-One',     value: 0, color: '#F59E0B' },
+              { icon: Calendar, label: 'Total Sessions', value: sessions.length,            color: '#7C3AED' },
+              { icon: Clock,    label: 'This Week',      value: thisWeekSessions.length,    color: '#6366F1' },
+              { icon: Users,    label: 'Upcoming',       value: upcomingSessions.length,    color: '#10B981' },
+              { icon: User,     label: 'Completed',      value: sessions.filter(s => s.status === 'completed').length, color: '#F59E0B' },
             ].map(({ icon: Icon, label, value, color }) => (
               <div key={label} className="sum-row">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { getUser, clearAuth } from '../../store/authStore'
 import { updatePassword, deleteAccount } from '../../api/profile'
 import {
@@ -30,9 +30,23 @@ function Toggle({ on, onClick }) {
 export default function SettingsPage() {
   const user     = getUser()
   const navigate = useNavigate()
+  const location = useLocation()
   const isTutor  = user?.role === 'tutor'
+  const base     = isTutor ? '/tutor/settings' : '/student/settings'
 
-  const [activeTab, setActiveTab] = useState('Account')
+  const tabFromPath = (p) => {
+    if (p.includes('/notifications')) return 'Notifications'
+    if (p.includes('/privacy'))       return 'Privacy'
+    if (p.includes('/preferences'))   return 'Preferences'
+    if (p.includes('/appearance'))    return 'Appearance'
+    return 'Account'
+  }
+
+  const [activeTab, setActiveTab] = useState(() => tabFromPath(location.pathname))
+
+  useEffect(() => {
+    setActiveTab(tabFromPath(location.pathname))
+  }, [location.pathname])
   const [pwForm, setPwForm] = useState({ current_password: '', password: '', password_confirmation: '' })
   const [showPw,  setShowPw]  = useState({})
   const [pwLoading, setPwLoading] = useState(false)
@@ -41,6 +55,8 @@ export default function SettingsPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting,      setDeleting]      = useState(false)
   const [delError,      setDelError]      = useState('')
+  const [delPassword,   setDelPassword]   = useState('')
+  const [showDelPw,     setShowDelPw]     = useState(false)
   const [notifToggles, setNotifToggles] = useState({ email: true, push: true, sms: false, marketing: false })
   const [theme, setTheme] = useState('light')
 
@@ -60,13 +76,14 @@ export default function SettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
+    if (!delPassword) { setDelError('Please enter your password to confirm.'); return }
     setDeleting(true); setDelError('')
     try {
-      await deleteAccount()
+      await deleteAccount(delPassword)
       clearAuth()
       navigate('/login')
-    } catch {
-      setDelError('Failed to delete account. Please try again.')
+    } catch (err) {
+      setDelError(err?.response?.data?.message || 'Failed to delete account. Please try again.')
       setDeleting(false)
     }
   }
@@ -108,9 +125,10 @@ export default function SettingsPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid #F0F0F4' }}>
-            {TABS.map(t => (
-              <button key={t} className={`set-tab${activeTab === t ? ' active' : ''}`} onClick={() => setActiveTab(t)}>{t}</button>
-            ))}
+            {TABS.map(t => {
+              const pathMap = { Account: base, Notifications: `${base}/notifications`, Privacy: `${base}/privacy`, Preferences: `${base}/preferences`, Appearance: `${base}/appearance` }
+              return <button key={t} className={`set-tab${activeTab === t ? ' active' : ''}`} onClick={() => navigate(pathMap[t])}>{t}</button>
+            })}
           </div>
 
           {activeTab === 'Account' && (
@@ -206,12 +224,28 @@ export default function SettingsPage() {
                 {!confirmDelete ? (
                   <button onClick={() => setConfirmDelete(true)} style={{ padding: '9px 18px', background: 'white', color: '#EF4444', border: '1.5px solid #EF4444', borderRadius: 9, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Delete Account</button>
                 ) : (
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={handleDeleteAccount} disabled={deleting} style={{ padding: '9px 18px', background: '#EF4444', color: 'white', border: 'none', borderRadius: 9, fontSize: 13.5, fontWeight: 700, cursor: deleting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: deleting ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {deleting && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
-                      {deleting ? 'Deleting...' : 'Yes, Delete My Account'}
-                    </button>
-                    <button onClick={() => setConfirmDelete(false)} style={{ padding: '9px 18px', background: 'white', color: '#374151', border: '1px solid #E5E7EB', borderRadius: 9, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        className="set-input"
+                        type={showDelPw ? 'text' : 'password'}
+                        placeholder="Enter your password to confirm"
+                        value={delPassword}
+                        onChange={e => setDelPassword(e.target.value)}
+                        style={{ paddingRight: 40, borderColor: '#FECACA' }}
+                      />
+                      <button onClick={() => setShowDelPw(v => !v)}
+                        style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                        {showDelPw ? <EyeOff size={15} color="#9CA3AF" /> : <Eye size={15} color="#9CA3AF" />}
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button onClick={handleDeleteAccount} disabled={deleting} style={{ padding: '9px 18px', background: '#EF4444', color: 'white', border: 'none', borderRadius: 9, fontSize: 13.5, fontWeight: 700, cursor: deleting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: deleting ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {deleting && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+                        {deleting ? 'Deleting...' : 'Yes, Delete My Account'}
+                      </button>
+                      <button onClick={() => { setConfirmDelete(false); setDelPassword(''); setDelError('') }} style={{ padding: '9px 18px', background: 'white', color: '#374151', border: '1px solid #E5E7EB', borderRadius: 9, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    </div>
                   </div>
                 )}
               </div>

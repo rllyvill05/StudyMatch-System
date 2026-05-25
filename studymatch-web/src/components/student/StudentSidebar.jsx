@@ -4,26 +4,22 @@ import { getUser } from '../../store/authStore'
 import { getConversations } from '../../api/chat'
 import logo from '../../assets/logo.png'
 import {
-  LayoutDashboard, Users, CalendarDays, BookMarked,
-  MessageCircle, ClipboardList, Calendar, Library,
+  LayoutDashboard, Users, CalendarDays,
+  MessageCircle, Calendar, Library,
   UserCircle, Settings, HelpCircle, ChevronDown,
   ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen,
-  HeartHandshake,
 } from 'lucide-react'
 
 /* ─── nav config ─────────────────────────────────────────────── */
 
 const NAV_LINKS = [
-  { icon: LayoutDashboard, label: 'Dashboard',           to: '/student/dashboard'      },
-  { icon: Users,           label: 'Find Tutors',         to: '/student/find-tutors'    },
-  { icon: HeartHandshake, label: 'My Matches',          to: '/student/matches'        },
-  { icon: CalendarDays,    label: 'Study Sessions',      to: '/student/study-sessions' },
-  { icon: BookMarked,      label: 'My Subjects',         to: '/student/my-subjects'    },
-  { icon: MessageCircle,   label: 'Messages',            to: '/student/messages',      badge: true },
-  { icon: ClipboardList,   label: 'Assignments',         to: '/student/assignments'    },
-  { icon: Calendar,        label: 'My Schedule',         to: '/student/schedule'       },
-  { icon: Library,         label: 'Resources ',          to: '/student/resources'      },
-  { icon: UserCircle,      label: 'Profile',             to: '/student/profile'        },
+  { icon: LayoutDashboard, label: 'Dashboard',      to: '/student/dashboard'      },
+  { icon: Users,           label: 'Find Tutors',    to: '/student/find-tutors'    },
+  { icon: CalendarDays,    label: 'Study Sessions', to: '/student/study-sessions' },
+  { icon: MessageCircle,   label: 'Messages',       to: '/student/messages',      badge: true },
+  { icon: Calendar,        label: 'My Schedule',    to: '/student/schedule'       },
+  { icon: Library,         label: 'Resources',      to: '/student/resources'      },
+  { icon: UserCircle,      label: 'Profile',        to: '/student/profile'        },
 ]
 
 const SETTINGS_LINKS = [

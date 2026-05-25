@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { getConversations, getConversation, sendMessage } from '../../api/chat'
+import { getConversations, getConversation, sendMessage, sendFile } from '../../api/chat'
+import { getMatchRequests } from '../../api/matchRequests'
 import { getUser } from '../../store/authStore'
 import {
   Search, Send, Paperclip, Image, FileText,
@@ -53,42 +54,110 @@ export default function StudentMessagesPage() {
   const [loadingConvs,setLoadingConvs]= useState(true)
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const [sending,     setSending]     = useState(false)
-  const bottomRef = useRef(null)
+  const bottomRef    = useRef(null)
+  const prevCountRef = useRef(0)
+  const fileRef      = useRef(null)
+  const [showEmoji,   setShowEmoji]   = useState(false)
+  const [sendingFile, setSendingFile] = useState(false)
 
-  // Load conversations
+  const EMOJIS = ['😀','😂','😊','❤️','👍','🙏','🔥','✨','🎉','😢','😮','🤔','👏','💪','🥳','😎','🤩','😅','🫡','💯']
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file || !activeId) return
+    e.target.value = ''
+    setSendingFile(true)
+    const opt = { id: Date.now(), message_type: file.type.startsWith('image/') ? 'image' : 'file', file_path: URL.createObjectURL(file), file_name: file.name, sender_id: me?.id, created_at: new Date().toISOString(), is_mine: true }
+    setMessages(p => [...p, opt])
+    try { await sendFile(activeId, file) }
+    catch { setMessages(p => p.filter(m => m.id !== opt.id)) }
+    finally { setSendingFile(false) }
+  }
+
+  const openFilePicker = (accept) => { if (fileRef.current) { fileRef.current.accept = accept; fileRef.current.click() } }
+
+  // Load conversations + merge accepted tutor match requests
   useEffect(() => {
     const load = async () => {
       setLoadingConvs(true)
       try {
-        const res = await getConversations()
-        const data = res?.data || res || []
-        setConvs(Array.isArray(data) ? data : [])
-        if (data.length > 0) setActiveId(data[0].partner_id || data[0].id)
+        const [convRes, reqRes] = await Promise.allSettled([
+          getConversations(),
+          getMatchRequests(),
+        ])
+
+        // Normalize conversations — backend returns other_user, latestMessage
+        const rawConvs = (convRes.status === 'fulfilled'
+          ? (convRes.value?.conversations || [])
+          : []
+        ).map(c => ({
+          ...c,
+          partner_id:      c.other_user?.id   || c.partner_id,
+          partner_name:    c.other_user?.name  || c.partner_name || 'Unknown',
+          last_message:    c.latestMessage?.content || c.last_message || '',
+          last_message_at: c.latestMessage?.created_at || c.last_message_at,
+        }))
+
+        // Deduplicate real convs by partner_id
+        const seenIds = new Set()
+        const deduped = rawConvs.filter(c => {
+          const key = String(c.partner_id)
+          if (!c.partner_id || seenIds.has(key)) return false
+          seenIds.add(key)
+          return true
+        })
+
+        // Merge accepted tutors who don't yet have a conversation
+        const sent = reqRes.status === 'fulfilled'
+          ? (reqRes.value?.data?.sent || [])
+          : []
+        for (const r of sent.filter(r => r.status === 'accepted')) {
+          const uid = r.tutor?.user?.id
+          if (uid && !seenIds.has(String(uid))) {
+            seenIds.add(String(uid))
+            deduped.push({
+              partner_id:   uid,
+              partner_name: r.tutor?.user?.name || 'Tutor',
+              last_message: '',
+              unread_count: 0,
+            })
+          }
+        }
+
+        setConvs(deduped)
+        if (deduped.length > 0) setActiveId(deduped[0].partner_id)
       } catch {}
       finally { setLoadingConvs(false) }
     }
     load()
   }, [])
 
-  // Load messages when active conversation changes
+  // Load messages + poll every 5 s for new replies
   useEffect(() => {
     if (!activeId) return
-    const load = async () => {
-      setLoadingMsgs(true)
-      setMessages([])
+    prevCountRef.current = 0
+
+    const fetchMsgs = async (initial = false) => {
+      if (initial) { setLoadingMsgs(true); setMessages([]) }
       try {
         const res = await getConversation(activeId)
-        const data = res?.data || res || []
-        setMessages(Array.isArray(data) ? data : [])
+        const msgs = res?.messages?.data || res?.messages || []
+        if (Array.isArray(msgs)) setMessages([...msgs].reverse())
       } catch {}
-      finally { setLoadingMsgs(false) }
+      finally { if (initial) setLoadingMsgs(false) }
     }
-    load()
+
+    fetchMsgs(true)
+    const interval = setInterval(() => fetchMsgs(false), 5000)
+    return () => clearInterval(interval)
   }, [activeId])
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom only when new messages arrive
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messages.length > prevCountRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+    prevCountRef.current = messages.length
   }, [messages])
 
   const handleSend = async () => {
@@ -212,9 +281,6 @@ export default function StudentMessagesPage() {
                   <Avatar name={partnerName} color={partnerColor} size={40} online={activeConv?.is_online} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B' }}>{partnerName}</div>
-                    <div style={{ fontSize: 12, color: activeConv?.is_online ? '#22C55E' : '#9CA3AF', fontWeight: 600, marginTop: 1 }}>
-                      {activeConv?.is_online ? 'Online' : 'Offline'}
-                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {[Video, Phone, MoreVertical].map((Icon, i) => (
@@ -245,10 +311,19 @@ export default function StudentMessagesPage() {
                           background: isMine ? '#F3F0FF' : 'white',
                           border: isMine ? '1px solid #DDD6FE' : '1px solid #F0F0F4',
                           borderRadius: isMine ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
-                          padding: '10px 14px', fontSize: 13.5, color: '#1E1B4B', lineHeight: 1.5,
-                          boxShadow: '0 1px 4px rgba(0,0,0,.04)',
+                          padding: m.message_type === 'image' ? 4 : '10px 14px', fontSize: 13.5, color: '#1E1B4B', lineHeight: 1.5,
+                          boxShadow: '0 1px 4px rgba(0,0,0,.04)', overflow: 'hidden',
                         }}>
-                          {m.content || m.message || m.text || ''}
+                          {m.message_type === 'image' ? (
+                            <img src={m.file_path} alt={m.file_name || 'image'} style={{ display: 'block', maxWidth: 260, maxHeight: 200, borderRadius: 10, objectFit: 'cover' }} />
+                          ) : m.message_type === 'file' ? (
+                            <a href={m.file_path} target="_blank" rel="noopener noreferrer" download={m.file_name} style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#7C3AED', textDecoration: 'none', fontWeight: 600 }}>
+                              <FileText size={16} />{m.file_name || 'Download File'}
+                            </a>
+                          ) : (m.content || m.message || m.text || '')}
+                          {(m.message_type === 'image' || m.message_type === 'file') && m.content && (
+                            <div style={{ padding: '4px 8px', fontSize: 12.5, color: '#6B7280' }}>{m.content}</div>
+                          )}
                         </div>
                         <div style={{ fontSize: 11, color: '#9CA3AF' }}>{formatTime(m.created_at)}</div>
                       </div>
@@ -258,7 +333,7 @@ export default function StudentMessagesPage() {
                 </div>
 
                 {/* Input */}
-                <div style={{ padding: '12px 16px', borderTop: '1px solid #F0F0F4' }}>
+                <div style={{ padding: '12px 16px', borderTop: '1px solid #F0F0F4', position: 'relative' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8F9FB', border: '1px solid #E5E7EB', borderRadius: 12, padding: '10px 14px', marginBottom: 8 }}>
                     <input
                       className="msg-input-field"
@@ -268,18 +343,29 @@ export default function StudentMessagesPage() {
                       onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
                     />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      {[Paperclip, Image, FileText, Smile].map((Icon, i) => (
-                        <button key={i} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-                          <Icon size={18} color="#9CA3AF" />
-                        </button>
+                  <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
+                  {showEmoji && (
+                    <div style={{ position: 'absolute', bottom: 90, left: 16, background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 10, display: 'flex', flexWrap: 'wrap', gap: 4, width: 220, boxShadow: '0 4px 16px rgba(0,0,0,.1)', zIndex: 10 }}>
+                      {EMOJIS.map(e => (
+                        <button key={e} onClick={() => { setInput(p => p + e); setShowEmoji(false) }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: 3, borderRadius: 6, lineHeight: 1 }}
+                          onMouseEnter={ev => ev.currentTarget.style.background = '#F3F0FF'}
+                          onMouseLeave={ev => ev.currentTarget.style.background = 'none'}
+                        >{e}</button>
                       ))}
                     </div>
-                    <button onClick={handleSend} disabled={!input.trim() || sending} style={{
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <button onClick={() => openFilePicker('*/*')} title="Attach file" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><Paperclip size={18} color="#9CA3AF" /></button>
+                      <button onClick={() => openFilePicker('image/*')} title="Send image" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><Image size={18} color="#9CA3AF" /></button>
+                      <button onClick={() => openFilePicker('.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt')} title="Send document" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><FileText size={18} color="#9CA3AF" /></button>
+                      <button onClick={() => setShowEmoji(p => !p)} title="Emoji" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><Smile size={18} color={showEmoji ? '#7C3AED' : '#9CA3AF'} /></button>
+                    </div>
+                    <button onClick={handleSend} disabled={!input.trim() || sending || sendingFile} style={{
                       width: 40, height: 40, borderRadius: 10,
-                      background: input.trim() ? '#7C3AED' : '#E5E7EB',
-                      border: 'none', cursor: input.trim() ? 'pointer' : 'default',
+                      background: (input.trim() || sendingFile) ? '#7C3AED' : '#E5E7EB',
+                      border: 'none', cursor: (input.trim() || sendingFile) ? 'pointer' : 'default',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       transition: 'background .15s',
                     }}>

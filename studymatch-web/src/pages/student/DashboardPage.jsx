@@ -185,7 +185,7 @@ function StudentDashboard({ user, stats }) {
           {/* Stats */}
           <div className="db-stat-grid">
             {[
-              { icon: Users,         color: '#10B981', value: stats.activeMatches,       label: 'Active Matches',    sub: 'View matches →',  to: '/student/matches'        },
+              { icon: Users,         color: '#10B981', value: stats.activeMatches,       label: 'Active Matches',    sub: 'View matches →',  to: '/student/find-tutors'    },
               { icon: GitPullRequest, color: '#F59E0B', value: stats.pendingRequests,    label: 'Pending Requests',  sub: 'View requests →', to: '/student/find-tutors'    },
               { icon: Clock,         color: '#7C3AED', value: stats.upcomingSessions,    label: 'Upcoming Sessions', sub: 'View sessions →', to: '/student/study-sessions' },
               { icon: Flame,         color: '#EF4444', value: stats.unreadNotifications, label: 'Notifications',     sub: 'View all →',      to: '/student/notifications'  },

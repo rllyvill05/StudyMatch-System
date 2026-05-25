@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getPotentialPartners } from '../../api/partners'
-import { sendMatchRequest } from '../../api/matchRequests'
+import { getMatchRequests, sendMatchRequest } from '../../api/matchRequests'
 import {
   Search, SlidersHorizontal, Star, MapPin,
   Clock, BookOpen, ChevronDown, UserPlus,
@@ -43,13 +43,16 @@ function Stars({ rating = 0 }) {
 function TutorCard({ tutor, index, onRequest, requested }) {
   const color = getColor(index)
   const name  = tutor.user?.name || tutor.name || 'Unknown'
-  const dept  = tutor.department || tutor.course || tutor.user?.department || ''
+  const dept  = tutor.specialization || tutor.position || tutor.department || tutor.user?.department || ''
   const rating = parseFloat(tutor.average_rating || tutor.rating || 0)
   const reviews = tutor.reviews_count || tutor.total_reviews || 0
   const subjects = tutor.strong_subjects
     ? tutor.strong_subjects.map(s => s.subject?.name || '').filter(Boolean)
     : (tutor.subjects || [])
-  const availability = tutor.availability || ''
+  const availSlots = Array.isArray(tutor.availability) ? tutor.availability.filter(s => s.is_active) : []
+  const availability = availSlots.length > 0
+    ? availSlots.map(s => s.day_of_week?.slice(0, 3)).join(', ')
+    : ''
   const bio   = tutor.bio || tutor.about || tutor.user?.bio || ''
   const price = tutor.price_per_session || tutor.hourly_rate || ''
 
@@ -167,6 +170,20 @@ export default function FindTutorsPage() {
 
   useEffect(() => { fetchTutors() }, [])
 
+  useEffect(() => {
+    getMatchRequests()
+      .then(res => {
+        const sent = res?.data?.sent || []
+        const ids = {}
+        sent.forEach(r => {
+          const uid = r.tutor?.user?.id || r.tutor?.user_id
+          if (uid) ids[uid] = true
+        })
+        setRequested(ids)
+      })
+      .catch(() => {})
+  }, [])
+
   const handleFilter = () => {
     fetchTutors({ department: dept, studyStyle: style })
   }
@@ -186,8 +203,8 @@ export default function FindTutorsPage() {
 
   const filtered = tutors.filter(t => {
     const name = t.user?.name || t.name || ''
-    const dept = t.department || t.course || t.user?.department || ''
-    return !search || name.toLowerCase().includes(search.toLowerCase()) || dept.toLowerCase().includes(search.toLowerCase())
+    const spec = t.specialization || t.position || t.department || ''
+    return !search || name.toLowerCase().includes(search.toLowerCase()) || spec.toLowerCase().includes(search.toLowerCase())
   })
 
   const DEPTS  = ['Mathematics', 'Physics', 'Chemistry', 'Computer Science', 'Biology', 'Engineering']

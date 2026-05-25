@@ -109,7 +109,7 @@ function FilterDropdown({ value, options, onChange }) {
 
 /* ─── student card ───────────────────────────────────────────── */
 
-function StudentCard({ student, index, saved, onSave }) {
+function StudentCard({ student, index, saved, onSave, onConnect }) {
   const color    = getColor(index)
   const name     = student.name || student.user?.name || 'Student'
   const field    = student.department || student.course || ''
@@ -194,7 +194,7 @@ function StudentCard({ student, index, saved, onSave }) {
         >
           View Profile
         </Link>
-        <button style={{
+        <button onClick={onConnect} style={{
           padding: '8px 18px', background: '#7C3AED', border: 'none',
           borderRadius: 9, color: 'white', fontSize: 13, fontWeight: 600,
           cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
@@ -332,7 +332,7 @@ export default function TutorDashboardPage() {
                 <div style={{ fontWeight: 700, fontSize: 17, color: '#1E1B4B' }}>Matched Students</div>
                 <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 2 }}>Students you have accepted for tutoring.</div>
               </div>
-              <Link to="/tutor/matches" style={{ fontSize: 13, color: '#7C3AED', fontWeight: 600, textDecoration: 'none' }}>View all matches</Link>
+              <Link to="/tutor/find-students" style={{ fontSize: 13, color: '#7C3AED', fontWeight: 600, textDecoration: 'none' }}>View all matches</Link>
             </div>
 
             <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, overflow: 'hidden', marginTop: 14 }}>
@@ -362,6 +362,7 @@ export default function TutorDashboardPage() {
                       index={i}
                       saved={savedIds.includes(student.id)}
                       onSave={toggleSave}
+                      onConnect={() => navigate(`/tutor/messages?partner=${student.user?.id}`)}
                     />
                   )
                 })
@@ -370,7 +371,7 @@ export default function TutorDashboardPage() {
 
             {accepted.length > 3 && (
               <div style={{ textAlign: 'center', marginTop: 14 }}>
-                <Link to="/tutor/matches" style={{
+                <Link to="/tutor/find-students" style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                   padding: '10px 24px', background: 'white', border: '1px solid #E5E7EB',
                   borderRadius: 10, color: '#374151', fontSize: 13.5, fontWeight: 600,
