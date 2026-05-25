@@ -32,9 +32,18 @@ class TutorController extends Controller
             }
         }
 
-        // Filter by department / specialization
+        // Filter by department — match tutor subjects (name) and text fields
         if ($request->filled('department')) {
-            $query->where('specialization', 'LIKE', '%' . $request->department . '%');
+            $department = $request->department;
+            $subjectNames = $this->departmentSubjectNames($department);
+
+            $query->where(function ($q) use ($department, $subjectNames) {
+                $q->whereHas('strongSubjects.subject', function ($s) use ($subjectNames) {
+                    $s->whereIn('name', $subjectNames);
+                })
+                ->orWhere('specialization', 'LIKE', '%' . $department . '%')
+                ->orWhere('position', 'LIKE', '%' . $department . '%');
+            });
         }
 
         // Filter by tutor type
@@ -115,5 +124,22 @@ class TutorController extends Controller
             ->get();
 
         return response()->json($tutors);
+    }
+
+    /**
+     * Map UI department labels to subject names stored in the database.
+     */
+    private function departmentSubjectNames(string $department): array
+    {
+        $map = [
+            'Mathematics'      => ['Mathematics', 'Calculus', 'Algebra', 'Statistics'],
+            'Physics'          => ['Physics'],
+            'Chemistry'        => ['Chemistry'],
+            'Computer Science' => ['Computer Science', 'Programming'],
+            'Biology'          => ['Biology'],
+            'Engineering'      => ['Computer Science', 'Programming', 'Physics', 'Mathematics'],
+        ];
+
+        return $map[$department] ?? [$department];
     }
 }

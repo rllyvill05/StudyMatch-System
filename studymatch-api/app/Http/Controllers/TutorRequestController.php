@@ -52,7 +52,12 @@ class TutorRequestController extends Controller
             'message'    => 'nullable|string|max:1000',
         ]);
 
-        $student = $request->user()->student;
+        $user    = $request->user();
+        $student = $user->student;
+
+        if (!$student && $user->role === 'student') {
+            $student = \App\Models\Student::create(['user_id' => $user->id]);
+        }
 
         if (!$student) {
             return response()->json(['message' => 'Only students can send tutor requests.'], 403);
@@ -93,7 +98,12 @@ class TutorRequestController extends Controller
             'message'          => 'nullable|string|max:1000',
         ]);
 
-        $student = $request->user()->student;
+        $user    = $request->user();
+        $student = $user->student;
+
+        if (!$student && $user->role === 'student') {
+            $student = \App\Models\Student::create(['user_id' => $user->id]);
+        }
 
         if (!$student) {
             return response()->json(['message' => 'Only students can send tutor requests.'], 403);

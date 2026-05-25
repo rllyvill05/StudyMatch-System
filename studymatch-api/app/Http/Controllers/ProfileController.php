@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Student;
+use App\Models\Tutor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -13,9 +15,34 @@ class ProfileController extends Controller
      */
     public function show(Request $request)
     {
-        $user = $request->user()->load(['student.weakSubjects.subject', 'tutor.strongSubjects.subject', 'tutor.availability']);
+        $user = $request->user();
+        $this->ensureRoleProfile($user);
 
-        return response()->json(['user' => $user]);
+        $user->load(['student.weakSubjects.subject', 'tutor.strongSubjects.subject', 'tutor.availability']);
+
+        return response()->json(['user' => $this->formatUserProfile($user)]);
+    }
+
+    /**
+     * Ensure student/tutor sub-profile exists when user.role matches.
+     */
+    private function ensureRoleProfile($user): void
+    {
+        if ($user->role === 'student' && !$user->student) {
+            Student::create(['user_id' => $user->id]);
+            $user->unsetRelation('student');
+            $user->load('student');
+        }
+
+        if ($user->role === 'tutor' && !$user->tutor) {
+            Tutor::create([
+                'user_id'             => $user->id,
+                'verification_status' => 'approved',
+                'verified_at'         => now(),
+            ]);
+            $user->unsetRelation('tutor');
+            $user->load('tutor');
+        }
     }
 
     /**
@@ -27,66 +54,79 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $request->validate([
-<<<<<<< HEAD
-            'name'     => 'sometimes|string|max:255',
-            'fullName' => 'sometimes|string|max:255',
-            'role'     => 'sometimes|in:student,tutor',
+            'name'           => 'sometimes|string|max:255',
+            'fullName'       => 'sometimes|string|max:255',
+            'phone'          => 'sometimes|nullable|string|max:20',
+            'role'           => 'sometimes|in:student,tutor',
+            'study_style'    => 'sometimes|nullable|string|max:100',
+            'preferred_days' => 'sometimes|nullable|string|max:255',
+            'preferred_time' => 'sometimes|nullable|string|max:100',
+            'study_goals'    => 'sometimes|nullable|string|max:2000',
         ]);
 
-        // Accept fullName as alias for name (mobile client sends fullName)
         $name = $request->input('name') ?? $request->input('fullName');
         if ($name) {
             $user->update(['name' => $name]);
         }
 
-        // Handle role changes — mobile selects role during onboarding setup
+        if ($request->has('phone')) {
+            $user->update(['phone' => $request->phone]);
+        }
+
         if ($request->has('role') && $request->role !== $user->role) {
             $user->update(['role' => $request->role]);
             $user->refresh();
-
-            // Ensure the sub-profile record exists for the new role
-            if ($request->role === 'tutor' && !$user->tutor) {
-                \App\Models\Tutor::create(['user_id' => $user->id]);
-            } elseif ($request->role === 'student' && !$user->student) {
-                \App\Models\Student::create(['user_id' => $user->id]);
-            }
-
-            $user->refresh();
         }
 
-        // Delegate sub-profile fields based on current role
-        if ($user->student && $request->hasAny(['student_id', 'program', 'year_level', 'bio'])) {
-            $user->student->update($request->only(['student_id', 'program', 'year_level', 'bio']));
-=======
-            'name'  => 'sometimes|string|max:255',
-            'phone' => 'sometimes|nullable|string|max:20',
-        ]);
+        $this->ensureRoleProfile($user);
 
-        $userFields = [];
-        if ($request->has('name'))  $userFields['name']  = $request->name;
-        if ($request->has('phone')) $userFields['phone'] = $request->phone;
-        if (!empty($userFields)) $user->update($userFields);
-
-        // Delegate sub-profile fields based on role
-        if ($user->student && $request->hasAny(['student_id', 'program', 'course', 'year_level', 'bio'])) {
-            $fields = $request->only(['student_id', 'program', 'year_level', 'bio']);
-            // Accept 'course' as frontend alias for 'program'
-            if ($request->has('course') && !$request->has('program')) {
-                $fields['program'] = $request->course;
+        if ($user->student) {
+            $studentFields = [
+                'student_id', 'program', 'year_level', 'bio',
+                'study_style', 'preferred_days', 'preferred_time', 'study_goals',
+            ];
+            $toUpdate = [];
+            foreach ($studentFields as $field) {
+                if ($request->has($field)) {
+                    $toUpdate[$field] = $request->input($field);
+                }
             }
-            $user->student->update(array_filter($fields, fn($v) => $v !== null));
->>>>>>> 636743e (updating/fixing web functions)
+            if ($request->has('course') && !$request->has('program')) {
+                $toUpdate['program'] = $request->course;
+            }
+            if (!empty($toUpdate)) {
+                $user->student->update($toUpdate);
+            }
         }
 
         if ($user->tutor && $request->hasAny(['employee_id', 'position', 'tutor_type', 'specialization', 'hourly_rate', 'bio', 'credentials', 'is_available'])) {
             $user->tutor->update($request->only(['employee_id', 'position', 'tutor_type', 'specialization', 'hourly_rate', 'bio', 'credentials', 'is_available']));
         }
 
+        $user = $user->fresh()->load(['student', 'tutor']);
+
         return response()->json([
             'success' => true,
             'message' => 'Profile updated successfully.',
-            'user'    => $user->fresh()->load(['student', 'tutor']),
+            'user'    => $this->formatUserProfile($user),
         ]);
+    }
+
+    /**
+     * Flatten student study preferences onto user JSON for the web app.
+     */
+    private function formatUserProfile($user): array
+    {
+        $data = $user->toArray();
+
+        if ($user->student) {
+            $data['study_style']    = $user->student->study_style;
+            $data['preferred_days'] = $user->student->preferred_days;
+            $data['preferred_time'] = $user->student->preferred_time;
+            $data['study_goals']    = $user->student->study_goals;
+        }
+
+        return $data;
     }
 
     /**

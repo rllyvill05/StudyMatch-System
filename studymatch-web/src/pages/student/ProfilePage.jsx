@@ -1,9 +1,22 @@
 import { useState, useEffect } from 'react'
-import { getProfile, updateProfile } from '../../api/profile'
+import { getProfile, updateProfile, updateProfileStep3 } from '../../api/profile'
+import { getSubjects } from '../../api/subjects'
 import { getUser, saveAuth, getToken } from '../../store/authStore'
 import {
+  DISCOVERY_SUBJECTS,
+  DISCOVERY_AVAILABILITY_DAYS,
+  DISCOVERY_AVAILABILITY_TIMES,
+  DISCOVERY_LEARNING_GOALS,
+  DISCOVERY_SESSION_FORMATS,
+  normalizeGoalValue,
+  normalizeDayValue,
+  normalizeTimeValue,
+  normalizeSessionFormat,
+  formatAvailabilityLabel,
+} from '../../constants/studentDiscovery'
+import {
   Camera, Pencil, Mail, Phone, Calendar, GraduationCap,
-  Heart, Globe, Star, BookOpen, CheckCircle, Loader2, Save, X,
+  BookOpen, CheckCircle, Loader2, Save, X, Target, Clock, MapPin,
 } from 'lucide-react'
 
 function Avatar({ name = '', size = 90 }) {
@@ -32,11 +45,13 @@ export default function StudentProfilePage() {
   const [success,   setSuccess]   = useState('')
   const [activeTab, setActiveTab] = useState('Profile')
 
+  const [allSubjects, setAllSubjects] = useState([])
   const [form, setForm] = useState({
     name: '', bio: '', phone: '',
     program: '', year_level: '',
     study_style: '', study_goals: '',
     preferred_days: '', preferred_time: '',
+    subjects_needed: [],
   })
 
   useEffect(() => {
@@ -47,17 +62,30 @@ export default function StudentProfilePage() {
         const data = res?.user || res || {}
         setProfile(data)
         const sub = data.student || {}
+        const weakNames = (sub.weak_subjects || sub.weakSubjects || [])
+          .map(ws => ws.subject?.name)
+          .filter(Boolean)
+        const matchedSubjects = weakNames.filter(n =>
+          DISCOVERY_SUBJECTS.some(d => d.toLowerCase() === n.toLowerCase() || n.toLowerCase().includes(d.toLowerCase())),
+        )
         setForm({
           name:           data.name             || authUser?.name || '',
           bio:            sub.bio               || data.bio       || '',
           phone:          data.phone            || '',
           program:        sub.program           || '',
           year_level:     sub.year_level        || '',
-          study_style:    data.study_style      || '',
-          study_goals:    data.study_goals      || '',
-          preferred_days: data.preferred_days   || '',
-          preferred_time: data.preferred_time   || '',
+          study_style:    normalizeSessionFormat(sub.study_style || data.study_style),
+          study_goals:    normalizeGoalValue(sub.study_goals || data.study_goals),
+          preferred_days: normalizeDayValue(sub.preferred_days || data.preferred_days),
+          preferred_time: normalizeTimeValue(sub.preferred_time || data.preferred_time),
+          subjects_needed: matchedSubjects.length ? matchedSubjects : weakNames.slice(0, 4),
         })
+        try {
+          const catalog = await getSubjects()
+          setAllSubjects(Array.isArray(catalog) ? catalog : catalog?.data || [])
+        } catch {
+          setAllSubjects([])
+        }
       } catch {
         setError('Failed to load profile.')
       } finally {
@@ -67,20 +95,90 @@ export default function StudentProfilePage() {
     load()
   }, [])
 
-  const handleSave = async () => {
+  const handleSave = async (options = {}) => {
+    const { stayOnTab = false, payload = form } = options
     setSaving(true)
     setError('')
     setSuccess('')
     try {
-      const res = await updateProfile(form)
+      const res = await updateProfile(payload)
       const updated = res?.user || res || {}
-      setProfile(p => ({ ...p, ...updated }))
-      saveAuth(getToken(), { ...authUser, name: form.name })
-      setSuccess('Profile updated successfully!')
-      setActiveTab('Profile')
+      setProfile(p => ({ ...p, ...updated, student: { ...p?.student, ...updated?.student } }))
+      if (payload.name) {
+        saveAuth(getToken(), { ...authUser, name: payload.name })
+      }
+      setForm(p => ({
+        ...p,
+        study_style:    updated.study_style    ?? p.study_style,
+        study_goals:    updated.study_goals    ?? p.study_goals,
+        preferred_days: updated.preferred_days ?? p.preferred_days,
+        preferred_time: updated.preferred_time ?? p.preferred_time,
+        name:           updated.name           ?? p.name,
+        phone:          updated.phone          ?? p.phone,
+        program:        updated.student?.program ?? p.program,
+        year_level:     updated.student?.year_level ?? p.year_level,
+        bio:            updated.student?.bio ?? updated.bio ?? p.bio,
+      }))
+      setSuccess(stayOnTab ? 'Preferences saved successfully!' : 'Profile updated successfully!')
+      if (!stayOnTab) setActiveTab('Profile')
       setTimeout(() => setSuccess(''), 3000)
     } catch {
-      setError('Failed to update profile. Please try again.')
+      setError(stayOnTab ? 'Failed to save preferences. Please try again.' : 'Failed to update profile. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleSubject = (subject) => {
+    setForm(p => ({
+      ...p,
+      subjects_needed: p.subjects_needed.includes(subject)
+        ? p.subjects_needed.filter(s => s !== subject)
+        : [...p.subjects_needed, subject],
+    }))
+  }
+
+  const handleSavePreferences = async () => {
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const payload = {
+        study_style:    form.study_style,
+        preferred_days: form.preferred_days,
+        preferred_time: form.preferred_time,
+        study_goals:    form.study_goals,
+      }
+      const res = await updateProfile(payload)
+      const updated = res?.user || res || {}
+
+      if (form.subjects_needed.length > 0 && allSubjects.length > 0) {
+        const subjects = form.subjects_needed
+          .map(name => {
+            const match = allSubjects.find(
+              s => (s.name || '').toLowerCase() === name.toLowerCase()
+                || (s.name || '').toLowerCase().includes(name.toLowerCase()),
+            )
+            return match ? { subject_id: match.id, difficulty_level: 'moderate' } : null
+          })
+          .filter(Boolean)
+        if (subjects.length > 0) {
+          await updateProfileStep3({ subjects })
+        }
+      }
+
+      setProfile(p => ({ ...p, ...updated, student: { ...p?.student, ...updated?.student } }))
+      setForm(p => ({
+        ...p,
+        study_style:    normalizeSessionFormat(updated.study_style ?? payload.study_style),
+        study_goals:    normalizeGoalValue(updated.study_goals ?? payload.study_goals),
+        preferred_days: normalizeDayValue(updated.preferred_days ?? payload.preferred_days),
+        preferred_time: normalizeTimeValue(updated.preferred_time ?? payload.preferred_time),
+      }))
+      setSuccess('Preferences saved! Tutors can now match you more accurately.')
+      setTimeout(() => setSuccess(''), 4000)
+    } catch {
+      setError('Failed to save preferences. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -95,6 +193,12 @@ export default function StudentProfilePage() {
   const memberSince = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : ''
+
+  const prefGoal = form.study_goals || normalizeGoalValue(profile?.study_goals || profile?.student?.study_goals)
+  const prefDays = form.preferred_days || normalizeDayValue(profile?.preferred_days || profile?.student?.preferred_days)
+  const prefTime = form.preferred_time || normalizeTimeValue(profile?.preferred_time || profile?.student?.preferred_time)
+  const prefFormat = form.study_style || normalizeSessionFormat(profile?.study_style || profile?.student?.study_style)
+  const prefAvail = formatAvailabilityLabel(prefDays, prefTime)
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -114,7 +218,8 @@ export default function StudentProfilePage() {
         .pp-tab { padding: 9px 2px; font-size: 14px; font-weight: 600; color: #9CA3AF; cursor: pointer; border: none; border-bottom: 2.5px solid transparent; background: none; font-family: 'DM Sans', sans-serif; transition: color .15s; }
         .pp-tab.active { color: #7C3AED; border-bottom-color: #7C3AED; }
         .pp-tab:hover { color: #7C3AED; }
-        .pp-input { width: 100%; padding: 10px 14px; border: 1.5px solid #E5E7EB; border-radius: 10px; font-size: 14px; color: #374151; outline: none; font-family: 'DM Sans', sans-serif; transition: border-color .15s; }
+        .pp-input { width: 100%; padding: 10px 14px; border: 1.5px solid #E5E7EB; border-radius: 10px; font-size: 14px; color: #111827; background: #fff; outline: none; font-family: 'DM Sans', sans-serif; transition: border-color .15s; }
+        .pp-input::placeholder { color: #6B7280; opacity: 1; }
         .pp-input:focus { border-color: #7C3AED; }
         .pp-label { font-size: 12.5px; font-weight: 600; color: #6B7280; display: block; margin-bottom: 6px; }
         .info-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid #F8F9FB; }
@@ -237,6 +342,31 @@ export default function StudentProfilePage() {
                   </div>
                 </div>
               </div>
+
+              <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '20px 22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>How Tutors Find You</span>
+                  <button type="button" onClick={() => setActiveTab('Preferences')} style={{
+                    background: 'none', border: 'none', color: '#7C3AED', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                  }}>Edit preferences</button>
+                </div>
+                <p style={{ fontSize: 12.5, color: '#9CA3AF', marginBottom: 12 }}>
+                  Same fields tutors use in Find Students Who Need Your Help.
+                </p>
+                {[
+                  { label: 'Subjects', value: form.subjects_needed?.length ? form.subjects_needed.join(', ') : '—' },
+                  { label: 'Learning goal', value: prefGoal || '—' },
+                  { label: 'Availability', value: prefAvail || '—' },
+                  { label: 'Session format', value: prefFormat || '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="info-row">
+                    <div>
+                      <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 3 }}>{label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#1E1B4B' }}>{value}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </>
           )}
 
@@ -271,7 +401,7 @@ export default function StudentProfilePage() {
               </div>
 
               <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-                <button onClick={handleSave} disabled={saving} style={{
+                <button onClick={() => handleSave()} disabled={saving} style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '11px 22px', background: '#7C3AED', color: 'white',
                   border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700,
@@ -296,24 +426,60 @@ export default function StudentProfilePage() {
           {/* ── Preferences Tab ── */}
           {activeTab === 'Preferences' && (
             <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '24px 28px' }}>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Study Preferences</div>
-              <p style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
-                These preferences help match you with the right tutors.
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>Study Preferences</div>
+              <p style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20, lineHeight: 1.5 }}>
+                Use the same options tutors search with on <strong style={{ color: '#7C3AED' }}>Find Students Who Need Your Help</strong> — subjects, availability, goals, and session format.
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                {[
-                  { key: 'study_style',    label: 'Study Style'    },
-                  { key: 'preferred_days', label: 'Preferred Days' },
-                  { key: 'preferred_time', label: 'Preferred Time' },
-                  { key: 'study_goals',    label: 'Study Goals'    },
-                ].map(({ key, label }) => (
-                  <div key={key}>
-                    <label className="pp-label">{label}</label>
-                    <input className="pp-input" value={form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} placeholder={label} />
-                  </div>
-                ))}
+
+              <label className="pp-label">Subjects I need help with</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+                {DISCOVERY_SUBJECTS.map(subject => {
+                  const selected = form.subjects_needed.includes(subject)
+                  return (
+                    <button key={subject} type="button" onClick={() => toggleSubject(subject)} style={{
+                      padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      border: selected ? '1.5px solid #7C3AED' : '1.5px solid #E5E7EB',
+                      background: selected ? '#F3F0FF' : 'white',
+                      color: selected ? '#7C3AED' : '#374151',
+                    }}>
+                      {subject}
+                    </button>
+                  )
+                })}
               </div>
-              <button onClick={handleSave} disabled={saving} style={{
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label className="pp-label"><Target size={12} style={{ verticalAlign: -2, marginRight: 4 }} />Learning goal</label>
+                  <select className="pp-input" value={form.study_goals} onChange={e => setForm(p => ({ ...p, study_goals: e.target.value }))}>
+                    <option value="">Select a goal...</option>
+                    {DISCOVERY_LEARNING_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="pp-label"><MapPin size={12} style={{ verticalAlign: -2, marginRight: 4 }} />Session format</label>
+                  <select className="pp-input" value={form.study_style} onChange={e => setForm(p => ({ ...p, study_style: e.target.value }))}>
+                    <option value="">Select format...</option>
+                    {DISCOVERY_SESSION_FORMATS.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="pp-label"><Calendar size={12} style={{ verticalAlign: -2, marginRight: 4 }} />Preferred days</label>
+                  <select className="pp-input" value={form.preferred_days} onChange={e => setForm(p => ({ ...p, preferred_days: e.target.value }))}>
+                    <option value="">Select days...</option>
+                    {DISCOVERY_AVAILABILITY_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="pp-label"><Clock size={12} style={{ verticalAlign: -2, marginRight: 4 }} />Preferred time</label>
+                  <select className="pp-input" value={form.preferred_time} onChange={e => setForm(p => ({ ...p, preferred_time: e.target.value }))}>
+                    <option value="">Select time...</option>
+                    {DISCOVERY_AVAILABILITY_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <button onClick={handleSavePreferences} disabled={saving} style={{
                 marginTop: 20, display: 'flex', alignItems: 'center', gap: 6,
                 padding: '11px 22px', background: '#7C3AED', color: 'white',
                 border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700,

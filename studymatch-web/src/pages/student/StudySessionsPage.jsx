@@ -1,87 +1,28 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { getSessions, createSession, cancelSession } from '../../api/sessions'
+import api from '../../api/axiosInstance'
+import {
+  getSessions, createSession, cancelSession, rescheduleSession,
+} from '../../api/sessions'
 import { getMatchRequests } from '../../api/matchRequests'
 import {
-  Search, Calendar, Clock, Users,
-  Plus, X, Loader2, CheckCircle, AlertCircle,
-  Video, BookOpen, ChevronDown,
+  SessionCard, SessionDetailsModal, RescheduleModal,
+} from '../../components/sessions/SessionShared'
+import {
+  isUpcomingTabSession, isCompletedTabSession, isCancelledTabSession,
+  isSessionToday, effectiveStatus,
+} from '../../utils/sessionUtils'
+import {
+  Search, Plus, X, Loader2, CheckCircle, BookOpen,
 } from 'lucide-react'
 
-/* ─── helpers ─────────────────────────────────────────── */
-
-const STATUS_COLORS = {
-  scheduled:  { bg: '#EEF2FF', text: '#6366F1' },
-  completed:  { bg: '#F0FDF4', text: '#10B981' },
-  cancelled:  { bg: '#FEF2F2', text: '#EF4444' },
-}
-
-function formatDate(dt) {
-  if (!dt) return '—'
-  return new Date(dt).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: 'numeric', minute: '2-digit',
-  })
-}
-
-function SessionCard({ session, onCancel }) {
-  const statusStyle = STATUS_COLORS[session.status] || STATUS_COLORS.scheduled
-  const tutorName = session.tutor?.user?.name || 'Tutor'
-  const subject   = session.subject?.name || session.notes || 'Study Session'
-
-  return (
-    <div style={{
-      background: 'white', border: '1px solid #F0F0F4', borderRadius: 14,
-      padding: '18px 20px', display: 'flex', gap: 16, alignItems: 'flex-start',
-    }}>
-      <div style={{ width: 44, height: 44, borderRadius: 12, background: '#F3F0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <BookOpen size={20} color="#7C3AED" />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span style={{ fontWeight: 700, fontSize: 14.5, color: '#1E1B4B' }}>{subject}</span>
-          <span style={{
-            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-            background: statusStyle.bg, color: statusStyle.text, textTransform: 'capitalize',
-          }}>{session.status}</span>
-        </div>
-        <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 6 }}>with {tutorName}</div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#9CA3AF' }}>
-            <Calendar size={13} /> {formatDate(session.scheduled_at)}
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#9CA3AF' }}>
-            <Clock size={13} /> {session.duration_minutes || 60} min
-          </span>
-          {session.session_link && (
-            <a href={session.session_link} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#7C3AED', fontWeight: 600, textDecoration: 'none' }}>
-              <Video size={13} /> Join
-            </a>
-          )}
-        </div>
-        {session.notes && <div style={{ marginTop: 8, fontSize: 12.5, color: '#9CA3AF', fontStyle: 'italic' }}>{session.notes}</div>}
-      </div>
-      {session.status === 'scheduled' && (
-        <button onClick={() => onCancel(session.id)} style={{
-          padding: '6px 12px', background: 'white', color: '#EF4444',
-          border: '1px solid #FECACA', borderRadius: 8, fontSize: 12, fontWeight: 600,
-          cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
-        }}>Cancel</button>
-      )}
-    </div>
-  )
-}
-
-/* ─── create session modal ────────────────────────────── */
-
-function CreateModal({ acceptedTutors, onClose, onCreated }) {
+function CreateModal({ acceptedTutors, subjects, onClose, onCreated }) {
   const [form, setForm] = useState({
-    tutor_id: '', scheduled_at: '', duration_minutes: '60',
-    notes: '', session_link: '',
+    tutor_id: '', subject_id: '', scheduled_at: '', duration_minutes: '60',
+    session_type: 'online', notes: '', session_link: '',
   })
   const [saving, setSaving] = useState(false)
-  const [error,  setError]  = useState('')
+  const [error, setError] = useState('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -91,8 +32,10 @@ function CreateModal({ acceptedTutors, onClose, onCreated }) {
     try {
       const res = await createSession({
         tutor_id:         parseInt(form.tutor_id),
+        subject_id:       form.subject_id ? parseInt(form.subject_id) : undefined,
         scheduled_at:     new Date(form.scheduled_at).toISOString(),
         duration_minutes: parseInt(form.duration_minutes) || 60,
+        session_type:     form.session_type,
         notes:            form.notes || undefined,
         session_link:     form.session_link || undefined,
       })
@@ -104,79 +47,119 @@ function CreateModal({ acceptedTutors, onClose, onCreated }) {
     }
   }
 
+  const fieldStyle = {
+    width: '100%',
+    padding: '11px 14px',
+    border: '1.5px solid #D1D5DB',
+    borderRadius: 10,
+    fontSize: 15,
+    fontFamily: 'inherit',
+    color: '#111827',
+    background: '#FFFFFF',
+    WebkitTextFillColor: '#111827',
+  }
+
+  const labelStyle = {
+    fontSize: 13,
+    fontWeight: 700,
+    color: '#374151',
+    display: 'block',
+    marginBottom: 6,
+  }
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: 'white', borderRadius: 18, padding: '28px 28px 24px', width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <span style={{ fontWeight: 800, fontSize: 18, color: '#1E1B4B' }}>Book a Session</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><X size={20} color="#9CA3AF" /></button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div
+        className="book-session-modal"
+        style={{
+          background: '#FFFFFF',
+          color: '#111827',
+          borderRadius: 18,
+          padding: 28,
+          width: '100%',
+          maxWidth: 500,
+          maxHeight: '90vh',
+          overflow: 'auto',
+          boxShadow: '0 24px 48px rgba(0,0,0,.2)',
+        }}
+      >
+        <style>{`
+          .book-session-modal,
+          .book-session-modal input,
+          .book-session-modal select,
+          .book-session-modal textarea,
+          .book-session-modal option {
+            color: #111827 !important;
+            -webkit-text-fill-color: #111827;
+          }
+          .book-session-modal input::placeholder,
+          .book-session-modal textarea::placeholder {
+            color: #6B7280 !important;
+            opacity: 1;
+          }
+          .book-session-modal select option {
+            color: #111827;
+            background: #fff;
+          }
+        `}</style>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+          <span style={{ fontWeight: 800, fontSize: 20, color: '#1E1B4B' }}>Book a Session</span>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={22} color="#6B7280" /></button>
         </div>
-
-        {error && <div style={{ padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, fontSize: 13.5, color: '#EF4444', marginBottom: 16 }}>{error}</div>}
-
+        {error && <div style={{ padding: 10, background: '#FEF2F2', color: '#EF4444', borderRadius: 10, marginBottom: 14, fontSize: 13 }}>{error}</div>}
         {acceptedTutors.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 16 }}>You need an accepted tutor match first.</div>
-            <Link to="/student/find-tutors" onClick={onClose} style={{ display: 'inline-block', padding: '10px 20px', background: '#7C3AED', color: 'white', borderRadius: 10, fontSize: 13.5, fontWeight: 700, textDecoration: 'none' }}>Find Tutors</Link>
+          <div style={{ textAlign: 'center', padding: 20 }}>
+            <p style={{ color: '#6B7280', marginBottom: 16 }}>You need an accepted tutor match first.</p>
+            <Link to="/student/find-tutors" onClick={onClose} style={{ padding: '10px 20px', background: '#7C3AED', color: 'white', borderRadius: 10, fontWeight: 700, textDecoration: 'none' }}>Find Tutors</Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>Tutor</label>
-              <select value={form.tutor_id} onChange={e => setForm(p => ({ ...p, tutor_id: e.target.value }))}
-                style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E5E7EB', borderRadius: 10, fontSize: 14, color: '#374151', outline: 'none', fontFamily: 'inherit' }}>
-                <option value="">Select a tutor...</option>
-                {acceptedTutors.map(t => (
-                  <option key={t.tutor_id} value={t.tutor_id}>{t.name}</option>
-                ))}
+              <label style={labelStyle}>Tutor</label>
+              <select value={form.tutor_id} onChange={e => setForm(p => ({ ...p, tutor_id: e.target.value }))} style={fieldStyle} required>
+                <option value="">Select tutor...</option>
+                {acceptedTutors.map(t => <option key={t.tutor_id} value={t.tutor_id}>{t.name}</option>)}
               </select>
             </div>
-
             <div>
-              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>Date & Time</label>
-              <input type="datetime-local" value={form.scheduled_at}
-                onChange={e => setForm(p => ({ ...p, scheduled_at: e.target.value }))}
-                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-                style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E5E7EB', borderRadius: 10, fontSize: 14, color: '#374151', outline: 'none', fontFamily: 'inherit' }} />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>Duration (minutes)</label>
-              <select value={form.duration_minutes} onChange={e => setForm(p => ({ ...p, duration_minutes: e.target.value }))}
-                style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E5E7EB', borderRadius: 10, fontSize: 14, color: '#374151', outline: 'none', fontFamily: 'inherit' }}>
-                {[30, 45, 60, 90, 120].map(m => <option key={m} value={m}>{m} minutes</option>)}
+              <label style={labelStyle}>Subject</label>
+              <select value={form.subject_id} onChange={e => setForm(p => ({ ...p, subject_id: e.target.value }))} style={fieldStyle}>
+                <option value="">Select subject (optional)</option>
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-
             <div>
-              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>Session Link (optional)</label>
-              <input type="url" value={form.session_link} placeholder="https://meet.google.com/..."
-                onChange={e => setForm(p => ({ ...p, session_link: e.target.value }))}
-                style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E5E7EB', borderRadius: 10, fontSize: 14, color: '#374151', outline: 'none', fontFamily: 'inherit' }} />
+              <label style={labelStyle}>Session type</label>
+              <select value={form.session_type} onChange={e => setForm(p => ({ ...p, session_type: e.target.value }))} style={fieldStyle}>
+                <option value="online">Online</option>
+                <option value="in_person">Face-to-face</option>
+              </select>
             </div>
-
             <div>
-              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>Notes (optional)</label>
-              <textarea rows={2} value={form.notes} placeholder="What do you want to cover?"
-                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E5E7EB', borderRadius: 10, fontSize: 14, color: '#374151', outline: 'none', fontFamily: 'inherit', resize: 'vertical' }} />
+              <label style={labelStyle}>Date & time</label>
+              <input type="datetime-local" value={form.scheduled_at} onChange={e => setForm(p => ({ ...p, scheduled_at: e.target.value }))}
+                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} style={fieldStyle} required />
             </div>
-
-            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-              <button type="submit" disabled={saving} style={{
-                flex: 1, padding: '12px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 10,
-                fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: saving ? 0.7 : 1,
-              }}>
-                {saving && <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />}
-                {saving ? 'Booking...' : 'Book Session'}
-              </button>
-              <button type="button" onClick={onClose} style={{
-                padding: '12px 20px', background: 'white', color: '#374151',
-                border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 14, fontWeight: 600,
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}>Cancel</button>
+            <div>
+              <label style={labelStyle}>Duration</label>
+              <select value={form.duration_minutes} onChange={e => setForm(p => ({ ...p, duration_minutes: e.target.value }))} style={fieldStyle}>
+                {[30, 45, 60, 90, 120].map(m => <option key={m} value={m}>{m} min</option>)}
+              </select>
             </div>
+            <div>
+              <label style={labelStyle}>Meeting link</label>
+              <input type="url" value={form.session_link} placeholder="https://meet.google.com/..." onChange={e => setForm(p => ({ ...p, session_link: e.target.value }))} style={fieldStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Notes / description</label>
+              <textarea rows={3} value={form.notes} placeholder="What do you want to cover?" onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} style={{ ...fieldStyle, resize: 'vertical' }} />
+            </div>
+            <button type="submit" disabled={saving} style={{
+              padding: 12, background: '#7C3AED', color: 'white', border: 'none', borderRadius: 10,
+              fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              {saving ? 'Booking...' : 'Book Session'}
+            </button>
           </form>
         )}
       </div>
@@ -184,143 +167,229 @@ function CreateModal({ acceptedTutors, onClose, onCreated }) {
   )
 }
 
-/* ─── page ───────────────────────────────────────────── */
+function EmptyState({ tab, onBook }) {
+  const messages = {
+    upcoming: {
+      title: 'No upcoming sessions.',
+      sub: 'Book your first study session.',
+      showBook: true,
+    },
+    completed: {
+      title: 'No completed sessions yet.',
+      sub: 'Finished sessions will appear here after your tutor marks them complete.',
+      showBook: false,
+    },
+    cancelled: {
+      title: 'No cancelled sessions.',
+      sub: 'Sessions you or your tutor cancelled will appear here.',
+      showBook: false,
+    },
+  }
+
+  const c = messages[tab] || messages.upcoming
+
+  return (
+    <div style={{ background: '#FAFAFF', border: '1px dashed #DDD6FE', borderRadius: 16, padding: 40, textAlign: 'center', maxWidth: 480, margin: '0 auto' }}>
+      <BookOpen size={36} color="#DDD6FE" style={{ margin: '0 auto 14px' }} />
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 8 }}>{c.title}</div>
+      <div style={{ fontSize: 14, color: '#9CA3AF', marginBottom: c.showBook ? 20 : 0 }}>{c.sub}</div>
+      {c.showBook && (
+        <button type="button" onClick={onBook} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 22px',
+          background: '#7C3AED', color: 'white', borderRadius: 10, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+          <Plus size={15} /> Book a Session
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function StudySessionsPage() {
-  const [sessions,       setSessions]       = useState([])
-  const [loading,        setLoading]        = useState(true)
-  const [activeTab,      setActiveTab]      = useState('upcoming')
-  const [showModal,      setShowModal]      = useState(false)
+  const [sessions, setSessions] = useState([])
+  const [subjects, setSubjects] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('upcoming')
+  const [showModal, setShowModal] = useState(false)
+  const [detailSession, setDetailSession] = useState(null)
+  const [rescheduleTarget, setRescheduleTarget] = useState(null)
+  const [rescheduleSaving, setRescheduleSaving] = useState(false)
   const [acceptedTutors, setAcceptedTutors] = useState([])
-  const [toast,          setToast]          = useState('')
+  const [toast, setToast] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [subjectFilter, setSubjectFilter] = useState('')
+  const [todayOnly, setTodayOnly] = useState(false)
+
+  const loadSessions = async () => {
+    try {
+      const data = await getSessions()
+      setSessions(Array.isArray(data?.data) ? data.data : [])
+    } catch { setSessions([]) }
+  }
 
   useEffect(() => {
     const load = async () => {
+      await loadSessions()
       try {
-        const data = await getSessions()
-        const list = data?.data || []
-        setSessions(Array.isArray(list) ? list : [])
-      } catch {}
-
+        const res = await api.get('/subjects')
+        const list = res.data?.data || res.data || []
+        setSubjects(Array.isArray(list) ? list : [])
+      } catch { setSubjects([]) }
       try {
-        const res     = await getMatchRequests()
-        const sent    = res?.data?.sent || []
-        const accepted = sent.filter(r => r.status === 'accepted').map(r => ({
+        const res = await getMatchRequests()
+        const sent = res?.data?.sent || []
+        setAcceptedTutors(sent.filter(r => r.status === 'accepted').map(r => ({
           tutor_id: r.tutor_id,
-          name:     r.tutor?.user?.name || `Tutor #${r.tutor_id}`,
-        }))
-        setAcceptedTutors(accepted)
+          name: r.tutor?.user?.name || `Tutor #${r.tutor_id}`,
+        })))
       } catch {}
-
       setLoading(false)
     }
     load()
   }, [])
 
+  const showToastMsg = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
+
   const handleCancel = async (id) => {
+    if (!window.confirm('Cancel this session?')) return
     try {
       await cancelSession(id)
       setSessions(prev => prev.map(s => s.id === id ? { ...s, status: 'cancelled' } : s))
-      showToast('Session cancelled.')
-    } catch { showToast('Failed to cancel.') }
+      showToastMsg('Session cancelled.')
+    } catch { showToastMsg('Failed to cancel.') }
   }
 
-  const handleCreated = (session) => {
-    setSessions(prev => [session, ...prev])
-    setShowModal(false)
-    showToast('Session booked successfully!')
+  const handleReschedule = async (data) => {
+    if (!rescheduleTarget) return
+    setRescheduleSaving(true)
+    try {
+      const res = await rescheduleSession(rescheduleTarget.id, data)
+      const updated = res.session || { ...rescheduleTarget, ...data }
+      setSessions(prev => prev.map(s => s.id === rescheduleTarget.id ? { ...s, ...updated } : s))
+      setRescheduleTarget(null)
+      showToastMsg('Session rescheduled.')
+    } catch {
+      showToastMsg('Failed to reschedule.')
+    } finally {
+      setRescheduleSaving(false)
+    }
   }
 
-  const showToast = (msg) => {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
-  }
+  const now = useMemo(() => new Date(), [sessions])
+  const upcoming = useMemo(() => sessions.filter(s => isUpcomingTabSession(s, now)), [sessions, now])
+  const completed = useMemo(() => sessions.filter(s => isCompletedTabSession(s)), [sessions])
+  const cancelled = useMemo(() => sessions.filter(s => isCancelledTabSession(s)), [sessions])
 
-  const now     = new Date()
-  const upcoming = sessions.filter(s => s.status === 'scheduled' && new Date(s.scheduled_at) >= now)
-  const past     = sessions.filter(s => s.status !== 'scheduled' || new Date(s.scheduled_at) < now)
+  const tabSessions = useMemo(() => {
+    if (activeTab === 'upcoming') return upcoming
+    if (activeTab === 'completed') return completed
+    if (activeTab === 'cancelled') return cancelled
+    return []
+  }, [activeTab, upcoming, completed, cancelled])
 
-  const displayed = activeTab === 'upcoming' ? upcoming : past
+  const displayed = useMemo(() => {
+    let list = tabSessions
+    if (statusFilter) list = list.filter(s => effectiveStatus(s, now) === statusFilter || s.status === statusFilter)
+    if (subjectFilter) list = list.filter(s => String(s.subject_id) === subjectFilter)
+    if (todayOnly) list = list.filter(s => isSessionToday(s, now))
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      list = list.filter(s =>
+        (s.tutor?.user?.name || '').toLowerCase().includes(q) ||
+        (s.subject?.name || '').toLowerCase().includes(q) ||
+        (s.notes || '').toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [tabSessions, statusFilter, subjectFilter, todayOnly, search, now])
 
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        .ss-wrap * { box-sizing: border-box; }
-        .ss-wrap { font-family: 'DM Sans', sans-serif; color: #1E1B4B; display: flex; flex-direction: column; gap: 20px; }
-        .ss-tab { padding: 10px 4px; font-size: 14px; font-weight: 600; color: #9CA3AF; cursor: pointer; border-bottom: 2.5px solid transparent; background: none; border-top: none; border-left: none; border-right: none; font-family: 'DM Sans', sans-serif; transition: color .15s; }
+        .ss-wrap { font-family: 'DM Sans', sans-serif; color: #1E1B4B !important; max-width: 920px; }
+        .ss-wrap input, .ss-wrap select { color: #111827; background: #fff; }
+        .ss-tab { padding: 10px 4px; font-size: 14px; font-weight: 600; color: #9CA3AF; cursor: pointer; border: none; border-bottom: 2.5px solid transparent; background: none; font-family: inherit; }
         .ss-tab.active { color: #7C3AED; border-bottom-color: #7C3AED; }
-        .ss-tab:hover { color: #7C3AED; }
+        .ss-input, .ss-select { padding: 9px 12px; border: 1.5px solid #E5E7EB; border-radius: 10px; font-size: 13.5px; font-family: inherit; }
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       {showModal && (
-        <CreateModal
-          acceptedTutors={acceptedTutors}
-          onClose={() => setShowModal(false)}
-          onCreated={handleCreated}
-        />
+        <CreateModal acceptedTutors={acceptedTutors} subjects={subjects} onClose={() => setShowModal(false)}
+          onCreated={s => { setSessions(p => [s, ...p]); setShowModal(false); setActiveTab('upcoming'); showToastMsg('Session booked! Tutor will be notified.') }} />
+      )}
+      {detailSession && (
+        <SessionDetailsModal session={detailSession} role="student" messageBase="/student/messages" onClose={() => setDetailSession(null)} />
+      )}
+      {rescheduleTarget && (
+        <RescheduleModal session={rescheduleTarget} saving={rescheduleSaving}
+          onClose={() => setRescheduleTarget(null)} onSave={handleReschedule} />
       )}
 
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: 28, right: 28, zIndex: 2000,
-          background: '#1E1B4B', color: 'white', padding: '12px 20px',
-          borderRadius: 12, fontSize: 13.5, fontWeight: 600,
-          boxShadow: '0 8px 24px rgba(0,0,0,.2)', display: 'flex', alignItems: 'center', gap: 8,
-        }}>
+        <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 2000, background: '#1E1B4B', color: 'white', padding: '12px 20px', borderRadius: 12, fontSize: 13.5, fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center' }}>
           <CheckCircle size={16} color="#10B981" /> {toast}
         </div>
       )}
 
-      <div className="ss-wrap">
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 4 }}>Study Sessions</h1>
-          <p style={{ fontSize: 13, color: '#9CA3AF' }}>View and manage your study sessions.</p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #F0F0F4' }}>
-          <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-            <button className={`ss-tab${activeTab === 'upcoming' ? ' active' : ''}`} onClick={() => setActiveTab('upcoming')}>
-              Upcoming ({upcoming.length})
-            </button>
-            <button className={`ss-tab${activeTab === 'past' ? ' active' : ''}`} onClick={() => setActiveTab('past')} style={{ marginLeft: 16 }}>
-              Past &amp; Cancelled ({past.length})
-            </button>
+      <div className="ss-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 4px' }}>Study Sessions</h1>
+            <p style={{ fontSize: 13, color: '#9CA3AF', margin: 0 }}>View and manage your study sessions.</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 1 }}
-            onMouseEnter={e => e.currentTarget.style.background = '#6D28D9'}
-            onMouseLeave={e => e.currentTarget.style.background = '#7C3AED'}
-          >
+          <button type="button" onClick={() => setShowModal(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
             <Plus size={15} /> Book Session
           </button>
         </div>
 
+        <div style={{ borderBottom: '1px solid #F0F0F4', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <button type="button" className={`ss-tab${activeTab === 'upcoming' ? ' active' : ''}`} onClick={() => setActiveTab('upcoming')}>Upcoming ({upcoming.length})</button>
+          <button type="button" className={`ss-tab${activeTab === 'completed' ? ' active' : ''}`} onClick={() => setActiveTab('completed')}>Completed ({completed.length})</button>
+          <button type="button" className={`ss-tab${activeTab === 'cancelled' ? ' active' : ''}`} onClick={() => setActiveTab('cancelled')}>Cancelled ({cancelled.length})</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: '1 1 180px' }}>
+            <Search size={14} color="#9CA3AF" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+            <input className="ss-input" style={{ width: '100%', paddingLeft: 32 }} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search sessions..." />
+          </div>
+          <select className="ss-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="scheduled">Confirmed</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="rescheduled">Rescheduled</option>
+          </select>
+          <select className="ss-select" value={subjectFilter} onChange={e => setSubjectFilter(e.target.value)}>
+            <option value="">All subjects</option>
+            {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6B7280', cursor: 'pointer' }}>
+            <input type="checkbox" checked={todayOnly} onChange={e => setTodayOnly(e.target.checked)} /> Today only
+          </label>
+        </div>
+
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 48, color: '#9CA3AF' }}>
-            <Loader2 size={28} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} />
-          </div>
+          <div style={{ textAlign: 'center', padding: 40 }}><Loader2 size={28} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} /></div>
+        ) : sessions.length === 0 ? (
+          <EmptyState tab="upcoming" onBook={() => setShowModal(true)} />
         ) : displayed.length === 0 ? (
-          <div style={{ background: '#F8F9FB', border: '1px dashed #DDD6FE', borderRadius: 14, padding: '48px 20px', textAlign: 'center' }}>
-            <Calendar size={32} color="#DDD6FE" style={{ margin: '0 auto 12px' }} />
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#374151', marginBottom: 6 }}>
-              {activeTab === 'upcoming' ? 'No upcoming sessions' : 'No past sessions'}
-            </div>
-            <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>
-              {activeTab === 'upcoming' ? 'Book your first session with a tutor.' : 'Completed sessions will appear here.'}
-            </div>
-            {activeTab === 'upcoming' && (
-              <button onClick={() => setShowModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', background: '#7C3AED', color: 'white', borderRadius: 9, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-                <Plus size={14} /> Book a Session
-              </button>
-            )}
-          </div>
+          <EmptyState tab={activeTab} onBook={() => setShowModal(true)} />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {displayed.map(s => (
-              <SessionCard key={s.id} session={s} onCancel={handleCancel} />
+              <SessionCard key={s.id} session={s} role="student"
+                onOpenDetails={setDetailSession}
+                onCancel={handleCancel}
+                onReschedule={setRescheduleTarget}
+              />
             ))}
           </div>
         )}

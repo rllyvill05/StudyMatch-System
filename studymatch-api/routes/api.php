@@ -15,6 +15,7 @@ use App\Http\Controllers\HelpCenterController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\SessionController;
+use App\Http\Controllers\StudentController;
 
 /*
 |--------------------------------------------------------------------------
@@ -65,6 +66,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/partners', [TutorController::class, 'index']);
     Route::get('/partners/{id}', [TutorController::class, 'show']);
 
+    // Students — tutor discovery
+    Route::get('/students', [StudentController::class, 'index']);
+
     // Tutor Requests — canonical paths
     Route::get('/tutor-requests', [TutorRequestController::class, 'index']);
     Route::post('/tutor-requests/send', [TutorRequestController::class, 'send']);
@@ -99,6 +103,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sessions', [SessionController::class, 'store']);
     Route::post('/sessions/{id}/accept', [SessionController::class, 'accept']);
     Route::post('/sessions/{id}/decline', [SessionController::class, 'decline']);
+    Route::post('/sessions/{id}/reschedule', [SessionController::class, 'reschedule']);
+    Route::post('/sessions/{id}/complete', [SessionController::class, 'complete']);
     Route::put('/sessions/{id}', [SessionController::class, 'update']);
     Route::delete('/sessions/{id}', [SessionController::class, 'cancel']);
 

@@ -1,19 +1,32 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getUser } from '../../store/authStore'
 import { getMatchRequests, acceptMatchRequest, declineMatchRequest } from '../../api/matchRequests'
+import { browseStudents } from '../../api/students'
+import { getProfile } from '../../api/profile'
+import { requestSessionWithStudent } from '../../api/sessions'
+import {
+  getSavedStudentIds, setSavedStudentIds, normalizeStudentFromMatchRequest,
+  filterStudentsBySearch,
+} from '../../utils/studentMatchUtils'
+import {
+  TUTOR_SUBJECT_FILTERS as SUBJECTS_FILTER,
+  TUTOR_AVAILABILITY_FILTERS as AVAIL_FILTER,
+  TUTOR_GOAL_FILTERS as GOAL_FILTER,
+  DISCOVERY_SUBJECTS,
+  normalizeGoalValue,
+  normalizeDayValue,
+  normalizeTimeValue,
+  normalizeSessionFormat,
+} from '../../constants/studentDiscovery'
 import {
   Search, ChevronDown, Bookmark, Check, X,
-  ChevronRight, Video, MoreVertical, Clock,
+  ChevronRight, Clock, BookOpen, Target, MapPin,
   Users, MessageSquare, Calendar, Trophy, ArrowRight,
-  Loader2,
+  Loader2, GraduationCap,
 } from 'lucide-react'
 
 /* ─── constants ──────────────────────────────────────────────── */
-
-const SUBJECTS_FILTER = ['All Subjects', 'Calculus', 'Physics', 'Statistics', 'Linear Algebra', 'Computer Science']
-const AVAIL_FILTER    = ['Availability', 'Weekdays', 'Weekends', 'Evenings', 'Mornings']
-const GOAL_FILTER     = ['Learning Goals', 'Exam Prep', 'Concept Understanding', 'Skill Building', 'Project Help']
 const COLORS          = ['#7C3AED','#EC4899','#10B981','#F59E0B','#6366F1','#EF4444']
 
 const getColor    = (i) => COLORS[i % COLORS.length]
@@ -107,101 +120,178 @@ function FilterDropdown({ value, options, onChange }) {
   )
 }
 
-/* ─── student card ───────────────────────────────────────────── */
+function DetailRow({ icon: Icon, label, value }) {
+  if (!value) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: '#374151', marginBottom: 4 }}>
+      <Icon size={13} color="#7C3AED" style={{ flexShrink: 0, marginTop: 2 }} />
+      <span><span style={{ fontWeight: 600, color: '#6B7280' }}>{label}: </span>{value}</span>
+    </div>
+  )
+}
 
-function StudentCard({ student, index, saved, onSave, onConnect }) {
-  const color    = getColor(index)
-  const name     = student.name || student.user?.name || 'Student'
-  const field    = student.department || student.course || ''
-  const year     = student.year_level || ''
-  const subjects = student.subjects || student.help_subjects || []
-  const goal     = student.study_goals || student.goal || ''
-  const avail    = student.availability ? [student.availability] : []
+function RequestSessionModal({ student, onClose, onSuccess }) {
+  const [form, setForm] = useState({
+    scheduled_at: '',
+    duration_minutes: '60',
+    session_type: 'online',
+    notes: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const name = student?.name || 'Student'
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!form.scheduled_at) { setError('Pick a date and time.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await requestSessionWithStudent({
+        student_id: student.id,
+        scheduled_at: new Date(form.scheduled_at).toISOString(),
+        duration_minutes: parseInt(form.duration_minutes, 10) || 60,
+        session_type: form.session_type,
+        notes: form.notes || `Session request for ${name}`,
+      })
+      onSuccess()
+      onClose()
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Could not send session request.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', padding: '10px 12px', border: '1.5px solid #E5E7EB',
+    borderRadius: 10, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box',
+  }
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 20,
-      padding: '20px 24px', borderBottom: '1px solid #F8F9FB',
-      transition: 'background .12s',
+      position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', zIndex: 200,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }} onClick={onClose}>
+      <form onClick={e => e.stopPropagation()} onSubmit={handleSubmit} style={{
+        background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 420,
+        boxShadow: '0 20px 50px rgba(0,0,0,.15)',
+      }}>
+        <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>Request Session</h3>
+        <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 18 }}>with {name}</p>
+        {error && <div style={{ fontSize: 13, color: '#EF4444', marginBottom: 12 }}>{error}</div>}
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 6 }}>Date & time</label>
+        <input type="datetime-local" required value={form.scheduled_at}
+          onChange={e => setForm(p => ({ ...p, scheduled_at: e.target.value }))}
+          style={{ ...inputStyle, marginBottom: 14 }} />
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 6 }}>Format</label>
+        <select value={form.session_type} onChange={e => setForm(p => ({ ...p, session_type: e.target.value }))}
+          style={{ ...inputStyle, marginBottom: 14 }}>
+          <option value="online">Online</option>
+          <option value="in_person">Face-to-face</option>
+        </select>
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 6 }}>Notes (optional)</label>
+        <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+          rows={2} style={{ ...inputStyle, marginBottom: 18, resize: 'vertical' }} />
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onClose} style={{
+            padding: '10px 18px', background: 'white', border: '1px solid #E5E7EB',
+            borderRadius: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          }}>Cancel</button>
+          <button type="submit" disabled={saving} style={{
+            padding: '10px 20px', background: '#7C3AED', color: 'white', border: 'none',
+            borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            {saving ? 'Sending…' : 'Send Request'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+/* ─── student card ───────────────────────────────────────────── */
+
+function StudentCard({ student, index, saved, onSave, onConnect, onRequestSession, compact }) {
+  const color    = getColor(index)
+  const name     = student.name || student.user?.name || 'Student'
+  const field    = student.department || student.program || student.course || ''
+  const year     = student.year_level || ''
+  const subjects = student.subjects || student.help_subjects || []
+  const goal     = student.study_goals || student.goal || ''
+  const avail    = student.availability || [student.preferred_days, student.preferred_time].filter(Boolean).join(' · ')
+  const matchPct = student.match_percentage
+  const activity = student.activity_label
+  const style    = student.study_style
+  const sessionPref = student.session_preference
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: compact ? 'flex-start' : 'center', gap: 20,
+      padding: compact ? '18px 20px' : '20px 24px', borderBottom: '1px solid #F8F9FB',
+      transition: 'background .12s', flexWrap: compact ? 'wrap' : 'nowrap',
     }}
       onMouseEnter={e => e.currentTarget.style.background = '#FAFAFA'}
       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
     >
-      {/* Avatar + match % */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <Avatar name={name} color={color} size={60} online={student.is_online} />
-        {student.match_percentage && (
+        <Avatar name={name} color={color} size={compact ? 52 : 60} online={student.is_online} />
+        {matchPct != null && (
           <>
             <span style={{ fontSize: 13, fontWeight: 800, color: '#10B981', background: '#F0FDF4', borderRadius: 20, padding: '2px 8px' }}>
-              {student.match_percentage}%
+              {matchPct}% Match
             </span>
-            <span style={{ fontSize: 10.5, color: '#9CA3AF', fontWeight: 500 }}>Match</span>
           </>
+        )}
+        {activity && (
+          <span style={{
+            fontSize: 11, fontWeight: 600,
+            color: student.is_online ? '#059669' : '#9CA3AF',
+          }}>
+            {student.is_online ? '🟢 ' : ''}{activity}
+          </span>
         )}
       </div>
 
-      {/* Info */}
-      <div style={{ width: 200, flexShrink: 0 }}>
+      <div style={{ width: compact ? '100%' : 200, flex: compact ? '1 1 180px' : undefined, flexShrink: compact ? undefined : 0, minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 3 }}>{name}</div>
-        <div style={{ fontSize: 12.5, color: '#9CA3AF', marginBottom: 10 }}>
+        <div style={{ fontSize: 12.5, color: '#9CA3AF', marginBottom: 8 }}>
           {field}{year ? ` · ${year}` : ''}
         </div>
         {subjects.length > 0 && (
-          <>
-            <div style={{ fontSize: 12, color: '#6B7280', fontWeight: 600, marginBottom: 6 }}>Needs help with</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-              {subjects.slice(0, 3).map((s, i) => (
-                <SubjectTag key={i} label={typeof s === 'object' ? s.name || s.subject : s} />
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Goal + Availability */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {goal && (
-          <>
-            <div style={{ fontSize: 12, color: '#6B7280', fontWeight: 600, marginBottom: 4 }}>Goal</div>
-            <div style={{ fontSize: 13, color: '#374151', fontWeight: 500, marginBottom: 12, lineHeight: 1.4 }}>{goal}</div>
-          </>
-        )}
-        {avail.length > 0 && (
-          <>
-            <div style={{ fontSize: 12, color: '#6B7280', fontWeight: 600, marginBottom: 5 }}>Availability</div>
-            {avail.map((a, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#374151', marginBottom: 3 }}>
-                <Clock size={12} color="#7C3AED" /> {a}
-              </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+            {subjects.slice(0, 3).map((s, i) => (
+              <SubjectTag key={i} label={typeof s === 'object' ? s.name || s.subject : s} />
             ))}
-          </>
+          </div>
         )}
+        <DetailRow icon={Target} label="Goal" value={goal} />
+        <DetailRow icon={Clock} label="Available" value={avail} />
+        <DetailRow icon={BookOpen} label="Learning style" value={style} />
+        <DetailRow icon={MapPin} label="Format" value={sessionPref} />
       </div>
 
-      {/* Actions */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, alignItems: 'flex-end' }}>
-        <button onClick={() => onSave(student.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, alignItems: 'flex-end', marginLeft: compact ? 'auto' : 0 }}>
+        <button type="button" onClick={() => onSave(student.id)} title={saved ? 'Remove bookmark' : 'Save student'}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
           <Bookmark size={16} color={saved ? '#7C3AED' : '#D1D5DB'} fill={saved ? '#7C3AED' : 'none'} />
         </button>
-        <Link to="/tutor/find-students" style={{
+        {onRequestSession && (
+          <button type="button" onClick={() => onRequestSession(student)} style={{
+            padding: '8px 18px', background: '#7C3AED', border: 'none',
+            borderRadius: 9, color: 'white', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <Calendar size={14} /> Request Session
+          </button>
+        )}
+        <button type="button" onClick={onConnect} style={{
           padding: '8px 18px', background: 'white',
           border: '1.5px solid #7C3AED', borderRadius: 9,
           color: '#7C3AED', fontSize: 13, fontWeight: 600,
-          textDecoration: 'none', whiteSpace: 'nowrap',
-        }}
-          onMouseEnter={e => e.currentTarget.style.background = '#F3F0FF'}
-          onMouseLeave={e => e.currentTarget.style.background = 'white'}
-        >
-          View Profile
-        </Link>
-        <button onClick={onConnect} style={{
-          padding: '8px 18px', background: '#7C3AED', border: 'none',
-          borderRadius: 9, color: 'white', fontSize: 13, fontWeight: 600,
           cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-        }}
-          onMouseEnter={e => e.currentTarget.style.background = '#6D28D9'}
-          onMouseLeave={e => e.currentTarget.style.background = '#7C3AED'}
-        >
+        }}>
           Connect
         </button>
       </div>
@@ -218,32 +308,103 @@ export default function TutorDashboardPage() {
   const [subjectFilter, setSubjectFilter] = useState('All Subjects')
   const [availFilter,   setAvailFilter]   = useState('Availability')
   const [goalFilter,    setGoalFilter]    = useState('Learning Goals')
-  const [savedIds,      setSavedIds]      = useState([])
+  const [searchQuery,   setSearchQuery]   = useState('')
+  const [savedIds,      setSavedIds]      = useState(() => getSavedStudentIds())
+  const [showSavedOnly, setShowSavedOnly] = useState(false)
 
   const [requests,  setRequests]  = useState([])
   const [accepted,  setAccepted]  = useState([])
   const [weekStats, setWeekStats] = useState({ matches: 0, sessions: 0, messages: 0 })
   const [loading,   setLoading]   = useState(true)
 
+  const [recommendations, setRecommendations] = useState([])
+  const [searching,       setSearching]       = useState(false)
+  const [hasSearched,     setHasSearched]     = useState(false)
+  const [searchError,     setSearchError]     = useState('')
+  const [sessionTarget,   setSessionTarget]   = useState(null)
+  const [sessionSent,     setSessionSent]     = useState(null)
+  const [tutorSubjects,   setTutorSubjects]   = useState([])
+
   const firstName = user?.name?.split(' ')[0] || 'Tutor'
+
+  const handleFindStudents = async (overrides = {}) => {
+    setSearching(true)
+    setSearchError('')
+    setHasSearched(true)
+    try {
+      const res = await browseStudents({
+        matchAll: true,
+        search: (overrides.search ?? searchQuery).trim() || undefined,
+        subject: overrides.subject ?? subjectFilter,
+        availability: overrides.availability ?? availFilter,
+        goal: overrides.goal ?? goalFilter,
+      })
+      const list = res?.data || []
+      setRecommendations(Array.isArray(list) ? list.filter(s => !s.already_matched) : [])
+    } catch {
+      setSearchError('Could not load student recommendations.')
+      setRecommendations([])
+    } finally {
+      setSearching(false)
+    }
+  }
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       try {
-        const res      = await getMatchRequests()
-        const received = res?.data?.received || []
+        const [matchRes, profileRes] = await Promise.all([
+          getMatchRequests(),
+          getProfile().catch(() => null),
+        ])
+        const received = matchRes?.data?.received || []
         setRequests(received.filter(r => r.status === 'pending'))
         const acc = received.filter(r => r.status === 'accepted')
         setAccepted(acc)
         setWeekStats(p => ({ ...p, matches: acc.length }))
-      } catch {}
-      finally { setLoading(false) }
+
+        const tutor = profileRes?.user?.tutor || profileRes?.tutor
+        const names = (tutor?.strong_subjects || tutor?.strongSubjects || [])
+          .map(ts => ts.subject?.name)
+          .filter(Boolean)
+        setTutorSubjects(names)
+
+        const firstTutorSubject = names.find(n => DISCOVERY_SUBJECTS.includes(n)) || names[0]
+
+        let nextSubject = 'All Subjects'
+        if (firstTutorSubject) {
+          nextSubject = firstTutorSubject
+          setSubjectFilter(firstTutorSubject)
+        }
+        await handleFindStudents({ subject: nextSubject, goal: goalFilter })
+      } catch {
+        await handleFindStudents()
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])
 
-  const toggleSave    = id => setSavedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+  const displayedRecommendations = useMemo(() => {
+    let list = recommendations
+    if (showSavedOnly) {
+      list = list.filter(s => savedIds.includes(Number(s.id)))
+    }
+    return filterStudentsBySearch(list, searchQuery)
+  }, [recommendations, searchQuery, showSavedOnly, savedIds])
+
+  const topMatches = useMemo(
+    () => displayedRecommendations.slice(0, 3),
+    [displayedRecommendations],
+  )
+
+  const toggleSave = id => {
+    const numId = Number(id)
+    const next = savedIds.includes(numId) ? savedIds.filter(x => x !== numId) : [...savedIds, numId]
+    setSavedIds(next)
+    setSavedStudentIds(next)
+  }
 
   const handleAccept  = async (id) => {
     try {
@@ -293,25 +454,57 @@ export default function TutorDashboardPage() {
               <h2 style={{ fontSize: 26, fontWeight: 800, color: '#1E1B4B', marginBottom: 8, lineHeight: 1.2 }}>
                 Find Students Who <span style={{ color: '#7C3AED' }}>Need Your Help</span>
               </h2>
-              <p style={{ fontSize: 13.5, color: '#6B7280', marginBottom: 20 }}>
-                Match with students based on subjects, goals and availability.
+              <p style={{ fontSize: 13.5, color: '#6B7280', marginBottom: 8 }}>
+                Shows all students in StudyMatch, ranked by your tutor subjects and their profile preferences.
               </p>
+              {tutorSubjects.length > 0 && (
+                <p style={{ fontSize: 12.5, color: '#7C3AED', fontWeight: 600, marginBottom: 16 }}>
+                  Your subjects: {tutorSubjects.join(', ')}
+                </p>
+              )}
+              {!tutorSubjects.length && <div style={{ marginBottom: 16 }} />}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: 'white', border: '1.5px solid #DDD6FE', borderRadius: 12,
+                padding: '10px 14px', marginBottom: 14, maxWidth: 480,
+              }}>
+                <Search size={16} color="#9CA3AF" />
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleFindStudents()}
+                  placeholder="Search students by name or subject..."
+                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, fontFamily: 'inherit', color: '#374151', background: 'transparent' }}
+                />
+              </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <FilterDropdown value={subjectFilter} options={SUBJECTS_FILTER} onChange={setSubjectFilter} />
                 <FilterDropdown value={availFilter}   options={AVAIL_FILTER}    onChange={setAvailFilter} />
                 <FilterDropdown value={goalFilter}    options={GOAL_FILTER}     onChange={setGoalFilter} />
-                <button style={{
+                <button type="button" onClick={handleFindStudents} disabled={searching} style={{
                   display: 'flex', alignItems: 'center', gap: 7,
                   padding: '9px 20px', background: '#7C3AED', color: 'white',
                   border: 'none', borderRadius: 10, fontSize: 13.5, fontWeight: 700,
-                  cursor: 'pointer', fontFamily: 'inherit',
+                  cursor: searching ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  opacity: searching ? 0.85 : 1,
                 }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#6D28D9'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#7C3AED'}
+                  onMouseEnter={e => { if (!searching) e.currentTarget.style.background = '#6D28D9' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#7C3AED' }}
                 >
-                  Find Students <Search size={15} />
+                  {searching ? <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={15} />}
+                  Find Students
                 </button>
               </div>
+              {savedIds.length > 0 && (
+                <button type="button" onClick={() => setShowSavedOnly(s => !s)} style={{
+                  marginTop: 12, background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 12.5, fontWeight: 600, color: '#7C3AED', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <Bookmark size={14} fill={showSavedOnly ? '#7C3AED' : 'none'} />
+                  {showSavedOnly ? 'Show all results' : `View ${savedIds.length} saved student${savedIds.length !== 1 ? 's' : ''}`}
+                </button>
+              )}
             </div>
             <div style={{ flexShrink: 0, position: 'relative', width: 180, height: 120 }}>
               {[{ n: 'SR', c: '#EC4899', x: 10, y: 10 }, { n: 'JT', c: '#10B981', x: 110, y: 0 }].map((a, i) => (
@@ -324,6 +517,100 @@ export default function TutorDashboardPage() {
               </div>
             </div>
           </div>
+
+          {sessionSent && (
+            <div style={{
+              background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12,
+              padding: '12px 16px', fontSize: 13.5, color: '#166534', fontWeight: 600,
+            }}>
+              Session request sent to {sessionSent}. They will see it in Study Sessions.
+            </div>
+          )}
+
+          {hasSearched && (
+            <div>
+              {!searching && !searchError && (
+                <div style={{ fontSize: 13.5, color: '#6B7280', fontWeight: 500, marginBottom: 12 }}>
+                  {displayedRecommendations.length} student{displayedRecommendations.length !== 1 ? 's' : ''} found
+                  {subjectFilter !== 'All Subjects' || goalFilter !== 'Learning Goals' || availFilter !== 'Availability'
+                    ? ' — ranked by match to your filters and profile'
+                    : ' — ranked by your tutor profile'}
+                </div>
+              )}
+
+              {searching && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 28 }}>
+                  <Loader2 size={24} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} />
+                </div>
+              )}
+
+              {searchError && (
+                <div style={{ fontSize: 13, color: '#EF4444', marginBottom: 12 }}>{searchError}</div>
+              )}
+
+              {!searching && !searchError && displayedRecommendations.length === 0 && (
+                <div style={{
+                  background: 'white', border: '1px dashed #DDD6FE', borderRadius: 16,
+                  padding: '36px 24px', textAlign: 'center',
+                }}>
+                  <GraduationCap size={32} color="#DDD6FE" style={{ margin: '0 auto 12px' }} />
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#374151', marginBottom: 6 }}>
+                    {showSavedOnly ? 'No saved students in these results.' : 'No matching students found.'}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#9CA3AF' }}>
+                    {showSavedOnly ? 'Bookmark students from search results to find them here.' : 'Try changing your filters or search terms.'}
+                  </div>
+                </div>
+              )}
+
+              {!searching && topMatches.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 17, color: '#1E1B4B', marginBottom: 4 }}>
+                    Top Matches for You
+                  </div>
+                  <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 12 }}>
+                    Highest compatibility based on your subjects, availability, and goals.
+                  </div>
+                  <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, overflow: 'hidden' }}>
+                    {topMatches.map((s, i) => (
+                      <StudentCard
+                        key={s.id || i}
+                        student={s}
+                        index={i}
+                        compact
+                        saved={savedIds.includes(Number(s.id))}
+                        onSave={toggleSave}
+                        onConnect={() => navigate(`/tutor/messages?partner=${s.user_id || s.user?.id}`)}
+                        onRequestSession={setSessionTarget}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!searching && displayedRecommendations.length > 3 && (
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: '#1E1B4B', margin: '20px 0 12px' }}>
+                    More Students ({displayedRecommendations.length - 3})
+                  </div>
+                  <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, overflow: 'hidden' }}>
+                    {displayedRecommendations.slice(3).map((s, i) => (
+                      <StudentCard
+                        key={s.id || i}
+                        student={s}
+                        index={i + 3}
+                        saved={savedIds.includes(Number(s.id))}
+                        onSave={toggleSave}
+                        onConnect={() => navigate(`/tutor/messages?partner=${s.user_id || s.user?.id}`)}
+                        onRequestSession={setSessionTarget}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
 
           {/* Accepted Students */}
           <div>
@@ -351,18 +638,30 @@ export default function TutorDashboardPage() {
                 </div>
               ) : (
                 visibleAccepted.map((r, i) => {
-                  const student = r.student || {}
-                  const name    = student.user?.name || student.user?.email || 'Student'
-                  const dept    = student.department || ''
-                  const subject = r.subject?.name || ''
+                  const base = normalizeStudentFromMatchRequest(r, i)
+                  const subject = r.subject?.name
+                  const rawGoal = base.study_goals || r.message || base.goal
+                  const enriched = {
+                    ...base,
+                    subjects: subject ? [subject, ...base.subjects].filter((v, idx, arr) => arr.indexOf(v) === idx) : base.subjects,
+                    goal: normalizeGoalValue(rawGoal) || rawGoal,
+                    study_goals: normalizeGoalValue(rawGoal) || rawGoal,
+                    preferred_days: normalizeDayValue(base.preferred_days) || base.preferred_days,
+                    preferred_time: normalizeTimeValue(base.preferred_time) || base.preferred_time,
+                    study_style: normalizeSessionFormat(base.study_style) || base.study_style,
+                    session_preference: base.session_preference || normalizeSessionFormat(base.study_style),
+                    availability: base.availability || [normalizeDayValue(base.preferred_days), normalizeTimeValue(base.preferred_time)].filter(Boolean).join(' · '),
+                    match_percentage: recommendations.find(s => s.id === base.id)?.match_percentage ?? 88,
+                  }
                   return (
                     <StudentCard
                       key={r.id || i}
-                      student={{ id: student.id, name, department: dept, subjects: subject ? [subject] : [], goal: r.message || '' }}
+                      student={enriched}
                       index={i}
-                      saved={savedIds.includes(student.id)}
+                      saved={savedIds.includes(Number(base.id))}
                       onSave={toggleSave}
-                      onConnect={() => navigate(`/tutor/messages?partner=${student.user?.id}`)}
+                      onConnect={() => navigate(`/tutor/messages?partner=${base.user_id}`)}
+                      onRequestSession={setSessionTarget}
                     />
                   )
                 })
@@ -489,6 +788,14 @@ export default function TutorDashboardPage() {
           </div>
         </div>
       </div>
+
+      {sessionTarget && (
+        <RequestSessionModal
+          student={sessionTarget}
+          onClose={() => setSessionTarget(null)}
+          onSuccess={() => setSessionSent(sessionTarget.name || 'student')}
+        />
+      )}
     </>
   )
 }

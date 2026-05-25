@@ -202,9 +202,14 @@ export default function FindTutorsPage() {
   }
 
   const filtered = tutors.filter(t => {
-    const name = t.user?.name || t.name || ''
-    const spec = t.specialization || t.position || t.department || ''
-    return !search || name.toLowerCase().includes(search.toLowerCase()) || spec.toLowerCase().includes(search.toLowerCase())
+    if (!search) return true
+    const q = search.toLowerCase()
+    const name = (t.user?.name || t.name || '').toLowerCase()
+    const spec = (t.specialization || t.position || t.department || '').toLowerCase()
+    const subjects = (t.strong_subjects || [])
+      .map(s => (s.subject?.name || s.name || '').toLowerCase())
+      .filter(Boolean)
+    return name.includes(q) || spec.includes(q) || subjects.some(s => s.includes(q))
   })
 
   const DEPTS  = ['Mathematics', 'Physics', 'Chemistry', 'Computer Science', 'Biology', 'Engineering']

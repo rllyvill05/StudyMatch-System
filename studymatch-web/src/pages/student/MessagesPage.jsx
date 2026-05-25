@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { getConversations, getConversation, sendMessage, sendFile } from '../../api/chat'
 import { getMatchRequests } from '../../api/matchRequests'
 import { getUser } from '../../store/authStore'
@@ -45,6 +46,8 @@ function formatTime(ts) {
 
 export default function StudentMessagesPage() {
   const me = getUser()
+  const [searchParams] = useSearchParams()
+  const partnerFromUrl = searchParams.get('partner')
 
   const [convs,       setConvs]       = useState([])
   const [activeId,    setActiveId]    = useState(null)
@@ -124,13 +127,26 @@ export default function StudentMessagesPage() {
           }
         }
 
+        if (partnerFromUrl) {
+          const match = deduped.find(c => String(c.partner_id) === String(partnerFromUrl))
+          if (!match) {
+            deduped.unshift({
+              partner_id:   partnerFromUrl,
+              partner_name: 'Tutor',
+              last_message: '',
+              unread_count: 0,
+            })
+          }
+          setActiveId(match?.partner_id ?? partnerFromUrl)
+        } else if (deduped.length > 0) {
+          setActiveId(deduped[0].partner_id)
+        }
         setConvs(deduped)
-        if (deduped.length > 0) setActiveId(deduped[0].partner_id)
       } catch {}
       finally { setLoadingConvs(false) }
     }
     load()
-  }, [])
+  }, [partnerFromUrl])
 
   // Load messages + poll every 5 s for new replies
   useEffect(() => {
