@@ -29,10 +29,29 @@ export default function TutorStudySessionsPage() {
   const [calDate, setCalDate] = useState({ year: today.getFullYear(), month: today.getMonth(), day: today.getDate() })
 
   useEffect(() => {
-    getSessions()
-      .then(data => setSessions(Array.isArray(data?.data) ? data.data : []))
-      .catch(() => setSessions([]))
-      .finally(() => setLoading(false))
+    let mounted = true
+
+    const fetchSessions = (silent = false) => {
+      if (!silent) setLoading(true)
+      getSessions()
+        .then(data => { if (mounted) setSessions(Array.isArray(data?.data) ? data.data : []) })
+        .catch(() => { if (mounted && !silent) setSessions([]) })
+        .finally(() => { if (mounted) setLoading(false) })
+    }
+
+    fetchSessions()
+
+    // Re-fetch every 30 s so new student bookings appear without navigation.
+    const interval = setInterval(() => fetchSessions(true), 30000)
+    // Also refresh when the browser tab regains focus.
+    const onFocus = () => fetchSessions(true)
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   const now = useMemo(() => new Date(), [sessions])
