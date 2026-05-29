@@ -18,9 +18,6 @@ class AppState extends ChangeNotifier {
   List<RealUser> _matchUsers = [];
   List<RealUser> _matchedUsers = [];
   List<RealUser> _pendingMatchUsers = [];
-  // Maps the other-user's id → match-request id. Populated for tutors when
-  // loading incoming requests so accept/decline can use the correct request id.
-  final Map<String, String> _pendingMatchRequestIds = {};
   List<StudySession> _sessions = [];
   List<String> _passedIds = [];
   List<DBResource> _dbResources = [];
@@ -71,26 +68,6 @@ class AppState extends ChangeNotifier {
           }
           _currentUser = candidate;
           ApiService.setToken(_currentUser!.token);
-          if (!candidate.onboardingComplete) {
-            try {
-              final profileResult = await ApiService.getProfile();
-              final profileData =
-                  profileResult['data'] as Map<String, dynamic>?;
-              if (profileData != null) {
-                final merged = Map<String, dynamic>.from(decoded)
-                  ..addAll(profileData);
-                final hasData =
-                    (merged['school']?.toString().isNotEmpty == true) ||
-                    (merged['department']?.toString().isNotEmpty == true) ||
-                    ((merged['subjects'] as List?)?.isNotEmpty == true);
-                if (hasData) {
-                  merged['onboardingComplete'] = true;
-                  _currentUser = UserModel.fromJson(merged);
-                  await _saveSession(_currentUser!);
-                }
-              }
-            } catch (_) {}
-          }
           notifyListeners();
           if (_currentUser!.onboardingComplete) {
             await _loadPassedIds();
@@ -131,34 +108,10 @@ class AppState extends ChangeNotifier {
   Future<void> loadPendingMatches() async {
     if (_currentUser == null) return;
     try {
-      if (_currentUser!.role == 'tutor') {
-        // Tutors need the incoming requests sent BY students so they can
-        // accept or decline them.  The /incoming endpoint returns raw
-        // TutorRequest objects that include both the match-request id (needed
-        // for the API call) and the nested student.user info.
-        final raw = await ApiService.getIncomingRequests();
-        _pendingMatchRequestIds.clear();
-        final users = <RealUser>[];
-        for (final r in raw) {
-          if ((r['status'] as String?) != 'pending') continue;
-          final studentMap =
-              (r['student'] as Map<String, dynamic>?)?['user']
-                  as Map<String, dynamic>?;
-          if (studentMap == null) continue;
-          final u = RealUser.fromJson(studentMap);
-          users.add(u);
-          _pendingMatchRequestIds[u.id] = r['id'].toString();
-        }
-        _pendingMatchUsers = users;
-      } else {
-        // Students see the requests they sent that are still awaiting a
-        // response from the tutor.
-        _pendingMatchUsers = await ApiService.getPendingMatches();
-      }
+      _pendingMatchUsers = await ApiService.getPendingMatches();
       notifyListeners();
     } catch (_) {
       _pendingMatchUsers = [];
-      _pendingMatchRequestIds.clear();
     }
   }
 
@@ -431,27 +384,17 @@ class AppState extends ChangeNotifier {
         final user = UserModel.fromJson(userJson);
         _currentUser = user;
         _onboardingStep = 0;
-        // Always fetch profile to populate full data and detect existing
-        // profile data even when complete_profile=0 in the database.
-        try {
-          final profileResult = await ApiService.getProfile();
-          final profileData = profileResult['data'] as Map<String, dynamic>?;
-          if (profileData != null) {
-            final merged = Map<String, dynamic>.from(userJson)
-              ..addAll(profileData);
-            if (!user.onboardingComplete) {
-              final hasData =
-                  (merged['school']?.toString().isNotEmpty == true) ||
-                  (merged['department']?.toString().isNotEmpty == true) ||
-                  ((merged['subjects'] as List?)?.isNotEmpty == true);
-              if (hasData) merged['onboardingComplete'] = true;
-            } else {
-              merged['onboardingComplete'] = true;
+        if (user.onboardingComplete) {
+          // Fetch full profile (login response only contains basic user fields).
+          try {
+            final profileResult = await ApiService.getProfile();
+            final profileData = profileResult['data'] as Map<String, dynamic>?;
+            if (profileData != null) {
+              final merged = Map<String, dynamic>.from(userJson)
+                ..addAll(profileData);
+              _currentUser = UserModel.fromJson(merged);
             }
-            _currentUser = UserModel.fromJson(merged);
-          }
-        } catch (_) {}
-        if (_currentUser!.onboardingComplete) {
+          } catch (_) {}
           await _saveSession(_currentUser!);
           await _loadPassedIds();
           await _loadMatchedUsersFromDb();
@@ -460,7 +403,7 @@ class AppState extends ChangeNotifier {
           await loadMatchUsers();
           await loadResources();
         } else {
-          await _saveSession(_currentUser!);
+          await _saveSession(user);
         }
         notifyListeners();
         return null;
@@ -715,12 +658,9 @@ class AppState extends ChangeNotifier {
   Future<Map<String, dynamic>> acceptMatchRequest(String matchedId) async {
     if (_currentUser == null) return {'success': false, 'message': 'Not logged in'};
     try {
-      // For tutors the pending list is keyed by student-user-id → match-request-id.
-      // Use the match-request id so the API can locate the exact record.
-      final requestId = _pendingMatchRequestIds[matchedId] ?? matchedId;
       final res = await ApiService.acceptMatch(
         userId: _currentUser!.id,
-        matchedId: requestId,
+        matchedId: matchedId,
       );
       await loadPendingMatches();
       await _loadMatchedUsersFromDb();
@@ -735,11 +675,9 @@ class AppState extends ChangeNotifier {
   Future<Map<String, dynamic>> declineMatchRequest(String matchedId) async {
     if (_currentUser == null) return {'success': false, 'message': 'Not logged in'};
     try {
-      // Same id-resolution as accept: tutors have a stored match-request id.
-      final requestId = _pendingMatchRequestIds[matchedId] ?? matchedId;
       final res = await ApiService.declineMatch(
         userId: _currentUser!.id,
-        matchedId: requestId,
+        matchedId: matchedId,
       );
       await loadPendingMatches();
       await loadMatchUsers();

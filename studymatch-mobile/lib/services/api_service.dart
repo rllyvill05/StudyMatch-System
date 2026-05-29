@@ -382,25 +382,6 @@ class ApiService {
     }
   }
 
-  /// GET /match-requests/incoming — raw TutorRequest objects sent TO the current
-  /// user (i.e. students who have requested a tutor). Returns the full raw JSON
-  /// list so callers can extract both the match-request `id` and the nested user.
-  static Future<List<Map<String, dynamic>>> getIncomingRequests() async {
-    try {
-      final res = await http.get(
-          Uri.parse('$_base/match-requests/incoming'),
-          headers: _jsonHeaders);
-      final data = jsonDecode(res.body);
-      if (data is Map && data['success'] == true && data['data'] != null) {
-        return List<Map<String, dynamic>>.from(
-            (data['data'] as List).map((e) => e as Map<String, dynamic>));
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
-
   static Future<List<StudySession>> getSessions() async {
     try {
       final res =
@@ -439,25 +420,16 @@ class ApiService {
     required DateTime scheduledAt,
     int durationMinutes = 60,
     String? notes,
-    String? subject,
-    String? sessionType,
-    String? sessionLink,
   }) async {
     try {
-      // Only send tutor_user_id (not tutor_id) so the API resolves the
-      // correct tutors-table record ID via User→Tutor relation.
-      // Sending tutor_id with a user ID would fail validation
-      // ('exists:tutors,id') or store the wrong foreign key.
       final body = <String, dynamic>{
+        'tutor_id': tutorUserId,
         'tutor_user_id': tutorUserId,
+        'student_id': studentUserId,
         'student_user_id': studentUserId,
         'scheduled_at': scheduledAt.toUtc().toIso8601String(),
         'duration_minutes': durationMinutes,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
-        if (sessionType != null && sessionType.isNotEmpty)
-          'session_type': sessionType,
-        if (sessionLink != null && sessionLink.isNotEmpty)
-          'session_link': sessionLink,
       };
       final res = await http.post(
         Uri.parse('$_base/sessions'),
@@ -465,13 +437,7 @@ class ApiService {
         body: jsonEncode(body),
       );
       try {
-        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-        // API returns HTTP 201 with {message, session} on success — no
-        // 'success' key. Normalise so callers can check result['success'].
-        if (res.statusCode == 201 || decoded.containsKey('session')) {
-          return {'success': true, ...decoded};
-        }
-        return decoded;
+        return jsonDecode(res.body) as Map<String, dynamic>;
       } catch (_) {
         return {
           'success': false,

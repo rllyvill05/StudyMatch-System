@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_theme.dart';
@@ -16,41 +15,22 @@ class SessionsScreen extends StatefulWidget {
 }
 
 class _SessionsScreenState extends State<SessionsScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
-  bool _refreshing = false;
-  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
-    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _reload();
-      // Poll every 30 s so new student bookings appear without a manual tap.
-      _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _reload());
+      final state = context.read<AppState>();
+      state.loadPendingMatches();
+      state.loadSessions();
     });
-  }
-
-  void _reload() {
-    if (!mounted) return;
-    final state = context.read<AppState>();
-    state.loadPendingMatches();
-    state.loadSessions();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
-    // Reload the moment the user switches back to the app so bookings made
-    // while it was in the background are visible immediately.
-    if (lifecycle == AppLifecycleState.resumed) _reload();
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -96,25 +76,13 @@ class _SessionsScreenState extends State<SessionsScreen>
                         color: const Color(0xFFF0F0F4),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: _refreshing
-                          ? const Padding(
-                              padding: EdgeInsets.all(9),
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: AppTheme.primary))
-                          : const Icon(Icons.refresh_rounded,
-                              color: AppTheme.textDark, size: 18),
+                      child: const Icon(Icons.refresh_rounded,
+                          color: AppTheme.textDark, size: 18),
                     ),
-                    onPressed: _refreshing
-                        ? null
-                        : () async {
-                            setState(() => _refreshing = true);
-                            final state = context.read<AppState>();
-                            await Future.wait([
-                              state.loadPendingMatches(),
-                              state.loadSessions(),
-                            ]);
-                            if (mounted) setState(() => _refreshing = false);
-                          },
+                    onPressed: () {
+                      context.read<AppState>().loadPendingMatches();
+                      context.read<AppState>().loadSessions();
+                    },
                   ),
                   const SizedBox(width: 4),
                   Stack(
@@ -611,7 +579,6 @@ class _UpcomingTabState extends State<_UpcomingTab> {
     setState(() => _processingId = null);
     if (result['success'] == true) {
       await context.read<AppState>().loadSessions();
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content:
             Text('Session confirmed!', style: TextStyle(fontFamily: 'Poppins')),
@@ -1139,7 +1106,7 @@ class _PastTab extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       children: [
         if (sessions.isEmpty) ...[
-          const _EmptyState(
+          _EmptyState(
             icon: Icons.history_rounded,
             title: 'No past sessions',
             subtitle: 'Completed sessions will appear here.',

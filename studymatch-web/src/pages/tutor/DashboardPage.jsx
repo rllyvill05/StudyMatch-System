@@ -268,8 +268,13 @@ export default function TutorDashboardPage() {
     const load = async () => {
       setLoading(true)
       try {
-        const [matchRes, profileRes, sessionsRes] = await Promise.all([
+<<<<<<< HEAD
+        const [matchRes, profileRes] = await Promise.all([
           getIncomingRequests(),
+=======
+        const [matchRes, profileRes, sessionsRes] = await Promise.all([
+          getMatchRequests(),
+>>>>>>> 9c4a0e7 (jeoffrey final)
           getProfile().catch(() => null),
           getSessions().catch(() => null),
         ])
