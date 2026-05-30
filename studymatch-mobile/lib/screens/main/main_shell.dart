@@ -8,6 +8,7 @@ import '../../widgets/student_drawer.dart';
 import 'dashboard_screen.dart';
 import 'match_screen.dart';
 import 'messages_screen.dart';
+import 'notifications_screen.dart';
 import 'sessions_screen.dart';
 import 'resources_screen.dart';
 import 'profile_screen.dart';
@@ -65,6 +66,7 @@ class _MainShellState extends State<MainShell> {
           icon: Icons.bookmark_rounded,
         ),
       StudentNav.messages => const MessagesScreen(),
+      StudentNav.notifications => const NotificationsScreen(),
       StudentNav.assignments => const PlaceholderScreen(
           title: 'Assignments',
           icon: Icons.assignment_rounded,
