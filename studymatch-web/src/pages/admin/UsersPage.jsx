@@ -113,19 +113,23 @@ export default function UsersPage() {
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => handleSuspend(user)}
-                  disabled={isLoading}
-                  style={{
-                    background: isSuspended ? '#f0fdf4' : '#fee2e2',
-                    color:      isSuspended ? '#166534' : '#dc2626',
-                    border: 'none', borderRadius: 10, padding: '7px 13px',
-                    cursor: isLoading ? 'not-allowed' : 'pointer', fontWeight: 600,
-                    fontFamily: 'inherit', fontSize: 12.5, opacity: isLoading ? 0.6 : 1,
-                  }}
-                >
-                  {isLoading ? '...' : isSuspended ? 'Unsuspend' : 'Suspend'}
-                </button>
+                {user.role !== 'admin' && user.role !== 'super_admin' ? (
+                  <button
+                    onClick={() => handleSuspend(user)}
+                    disabled={isLoading}
+                    style={{
+                      background: isSuspended ? '#f0fdf4' : '#fee2e2',
+                      color:      isSuspended ? '#166534' : '#dc2626',
+                      border: 'none', borderRadius: 10, padding: '7px 13px',
+                      cursor: isLoading ? 'not-allowed' : 'pointer', fontWeight: 600,
+                      fontFamily: 'inherit', fontSize: 12.5, opacity: isLoading ? 0.6 : 1,
+                    }}
+                  >
+                    {isLoading ? '...' : isSuspended ? 'Unsuspend' : 'Suspend'}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' }}>Protected</span>
+                )}
               </div>
             </div>
           )

@@ -10,12 +10,25 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
+        // Basic web admin — access via studymatch-web admin panel
         User::firstOrCreate(
             ['email' => 'admin@studymatch.com'],
             [
-                'name'              => 'System Admin',
+                'name'              => 'Web Admin',
                 'password'          => Hash::make('Admin@1234'),
                 'role'              => 'admin',
+                'email_verified_at' => now(),
+                'profile_completed' => true,
+            ]
+        );
+
+        // Super admin — access via studymatchadmin Desktop Console only
+        User::firstOrCreate(
+            ['email' => 'superadmin@studymatch.com'],
+            [
+                'name'              => 'Super Admin',
+                'password'          => Hash::make('SuperAdmin@1234'),
+                'role'              => 'super_admin',
                 'email_verified_at' => now(),
                 'profile_completed' => true,
             ]

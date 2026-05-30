@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, CalendarDays, MessageCircle,
   Library, UserCircle, Settings, HelpCircle,
   ChevronDown, ChevronRight,
-  PanelLeftClose, PanelLeftOpen, Trophy, Shield,
+  PanelLeftClose, PanelLeftOpen, Shield, Star, Flag,
 } from 'lucide-react'
 
 /* ─── nav config ─────────────────────────────────────────────── */
@@ -20,6 +20,8 @@ const NAV_LINKS = [
   { icon: Library,         label: 'Resources',     to: '/tutor/resources'      },
   { icon: CalendarDays,    label: 'My Schedule',   to: '/tutor/schedule'       },
   { icon: UserCircle,      label: 'My Profile',    to: '/tutor/profile'        },
+  { icon: Star,            label: 'Feedback',      to: '/tutor/feedback'       },
+  { icon: Flag,            label: 'Complaints',    to: '/tutor/complaints'     },
 ]
 
 const SETTINGS_LINKS = [
@@ -228,32 +230,6 @@ export default function TutorSidebar() {
           )}
         </nav>
 
-        {/* ── Become a Top Tutor card ── */}
-        {!collapsed ? (
-          <div style={{ padding: '8px 10px' }}>
-            <div style={{ background: 'linear-gradient(135deg, #7C3AED, #6366F1)', borderRadius: 12, padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <Trophy size={15} color="white" />
-                <span style={{ fontWeight: 700, fontSize: 12.5, color: 'white' }}>Become a Top Tutor</span>
-              </div>
-              <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5, marginBottom: 10 }}>
-                Help more students, build connections, and grow your impact.
-              </div>
-              <button style={{ width: '100%', padding: '7px', background: 'white', color: '#7C3AED', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                View Progress →
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: '8px 0 4px', display: 'flex', justifyContent: 'center' }}>
-            <div className="ts-link-wrap">
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #7C3AED, #6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                <Trophy size={17} color="white" />
-              </div>
-              <span className="ts-tooltip">Become a Top Tutor</span>
-            </div>
-          </div>
-        )}
 
         {/* ── Help ── */}
         {!collapsed ? (

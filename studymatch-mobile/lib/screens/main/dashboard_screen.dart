@@ -15,6 +15,17 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  get unread => null;
+
+  void _showNotificationsSheet(BuildContext context, AppState state) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _NotificationsSheet(state: state),
+    );
+  }
+
   String _greeting() {
     final h = DateTime.now().hour;
     if (h < 12) return 'Good morning';
@@ -27,6 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AppState>().loadConversations();
+      context.read<AppState>().fetchNotifications();
     });
   }
 
@@ -46,7 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         : 'S';
 
     final activeMatches = state.matchedUsers.length;
-    final unread = state.unreadMessageCount;
+    final unreadNotifs = state.unreadNotificationCount;
 
     return ColoredBox(
       color: AppTheme.bgLight,
@@ -70,7 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               onPressed: () => ShellScope.of(context)
                                   .navigate(StudentNav.notifications),
                             ),
-                            if (unread > 0)
+                            if (unreadNotifs > 0)
                               Positioned(
                                 right: 10,
                                 top: 10,
@@ -83,7 +95,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   constraints: const BoxConstraints(
                                       minWidth: 16, minHeight: 16),
                                   child: Text(
-                                    unread > 9 ? '9+' : '$unread',
+                                    unreadNotifs > 9 ? '9+' : '$unreadNotifs',
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
                                         color: Colors.white,
@@ -123,7 +135,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       activeMatches: activeMatches,
                       pendingRequests: state.pendingMatchUsers.length,
                       upcomingSessions: state.sessions.length,
-                      notifications: unread,
+                      notifications: unreadNotifs,
                     ),
                     const SizedBox(height: 20),
                     _SectionCard(
@@ -642,6 +654,213 @@ class _StreakDot extends StatelessWidget {
               fontSize: 9, color: AppTheme.textMuted, fontFamily: 'Poppins'),
         ),
       ],
+    );
+  }
+}
+// ── Notifications bottom sheet ─────────────────────────────────────────────
+
+class _NotificationsSheet extends StatelessWidget {
+  final AppState state;
+  const _NotificationsSheet({required this.state});
+
+  IconData _iconFor(String type) {
+    switch (type) {
+      case 'match_request':
+        return Icons.handshake_outlined;
+      case 'session':
+        return Icons.calendar_today_outlined;
+      case 'announcement':
+        return Icons.campaign_outlined;
+      default:
+        return Icons.notifications_outlined;
+    }
+  }
+
+  Color _colorFor(String type) {
+    switch (type) {
+      case 'match_request':
+        return const Color(0xFF10B981);
+      case 'session':
+        return const Color(0xFFF59E0B);
+      case 'announcement':
+        return const Color(0xFF7C3AED);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.month}/${dt.day}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notifs = state.notifications;
+    final unreadNotifs = state.unreadNotificationCount;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  const Text('Notifications',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1E1B4B),
+                          fontFamily: 'Poppins')),
+                  if (unreadNotifs > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFF7C3AED),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: Text('$unreadNotifs',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                  const Spacer(),
+                  if (unreadNotifs > 0)
+                    TextButton(
+                      onPressed: () {
+                        state.markAllNotificationsRead();
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Mark all read',
+                          style: TextStyle(
+                              color: Color(0xFF7C3AED),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: notifs.isEmpty
+                  ? const Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.notifications_none_rounded,
+                          size: 48, color: Color(0xFFD1D5DB)),
+                      SizedBox(height: 12),
+                      Text('No notifications yet',
+                          style: TextStyle(
+                              color: Color(0xFF9CA3AF),
+                              fontSize: 14,
+                              fontFamily: 'Poppins')),
+                    ]))
+                  : ListView.separated(
+                      controller: controller,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: notifs.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 72),
+                      itemBuilder: (_, i) {
+                        final n = notifs[i];
+                        final col = _colorFor(n.type);
+                        return InkWell(
+                          onTap: () => state.markNotificationRead(n.id),
+                          child: Container(
+                            color: n.isRead
+                                ? Colors.white
+                                : const Color(0xFFFAFAFF),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 14),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: col.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(_iconFor(n.type),
+                                      color: col, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(n.title,
+                                          style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontWeight: n.isRead
+                                                  ? FontWeight.w500
+                                                  : FontWeight.w700,
+                                              color: const Color(0xFF1E1B4B),
+                                              fontFamily: 'Poppins')),
+                                      const SizedBox(height: 2),
+                                      Text(n.message,
+                                          style: const TextStyle(
+                                              fontSize: 12.5,
+                                              color: Color(0xFF6B7280),
+                                              fontFamily: 'Poppins'),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(_timeAgo(n.createdAt),
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF9CA3AF))),
+                                    if (!n.isRead) ...[
+                                      const SizedBox(height: 4),
+                                      Container(
+                                          width: 7,
+                                          height: 7,
+                                          decoration: const BoxDecoration(
+                                              color: Color(0xFF7C3AED),
+                                              shape: BoxShape.circle)),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

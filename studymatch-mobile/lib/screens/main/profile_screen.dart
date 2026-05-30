@@ -286,6 +286,33 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
+/// Returns a human-readable bio string, or null if the bio is a JSON blob
+/// (registration data stored by the tutor onboarding flow).
+String? _readableBio(String? bio) {
+  if (bio == null || bio.isEmpty) return null;
+  final trimmed = bio.trim();
+  // If it starts with '{' it's the JSON registration payload — not displayable as bio
+  if (trimmed.startsWith('{')) {
+    // Try to extract a personal_bio key if it exists
+    try {
+      final Map<String, dynamic> data = Map<String, dynamic>.from(
+        (RegExp(r'"personal_bio"\s*:\s*"((?:[^"\\]|\\.)*)"')
+                .firstMatch(trimmed)
+                ?.group(1) != null)
+            ? {'personal_bio': RegExp(r'"personal_bio"\s*:\s*"((?:[^"\\]|\\.)*)"')
+                .firstMatch(trimmed)!
+                .group(1)!}
+            : {},
+      );
+      final personal = data['personal_bio'] as String?;
+      return (personal != null && personal.isNotEmpty) ? personal : null;
+    } catch (_) {
+      return null;
+    }
+  }
+  return trimmed;
+}
+
 // ── Profile info card ─────────────────────────────────────────────────────────
 class _ProfileInfoCard extends StatelessWidget {
   final dynamic user;
@@ -427,12 +454,12 @@ class _ProfileInfoCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (user.bio != null && user.bio!.isNotEmpty) ...[
+            if (_readableBio(user.bio) != null) ...[
               const SizedBox(height: 12),
               const Divider(color: AppTheme.borderLight, height: 1),
               const SizedBox(height: 12),
               Text(
-                user.bio!,
+                _readableBio(user.bio)!,
                 style: const TextStyle(
                   fontSize: 13,
                   color: AppTheme.textBody,

@@ -7,7 +7,7 @@ import {
 import { getStudentHelpSubjects } from '../../utils/studentMatchUtils'
 import {
   ChevronDown, Clock, SlidersHorizontal,
-  Users, ArrowRight, Trophy, Check, X,
+  Users, Check, X,
   GraduationCap, Loader2, RefreshCw, MessageSquare, BookOpen,
 } from 'lucide-react'
 
@@ -403,19 +403,6 @@ export default function FindStudentsPage() {
             ))}
           </div>
 
-          <div style={{ background: 'linear-gradient(135deg, #7C3AED, #6366F1)', borderRadius: 16, padding: '20px' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <Trophy size={20} color="white" />
-            </div>
-            <div style={{ fontWeight: 800, fontSize: 15, color: 'white', marginBottom: 8 }}>Become a Top Tutor</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, marginBottom: 16 }}>
-              Accept requests, complete sessions, and build your reputation.
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: 'white', borderRadius: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#7C3AED', flex: 1 }}>View your profile</span>
-              <ArrowRight size={14} color="#7C3AED" />
-            </div>
-          </div>
         </div>
       </div>
     </>

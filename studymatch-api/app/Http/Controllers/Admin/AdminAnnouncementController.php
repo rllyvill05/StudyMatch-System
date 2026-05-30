@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 
 class AdminAnnouncementController extends Controller
@@ -53,7 +54,9 @@ class AdminAnnouncementController extends Controller
             'expires_at'   => $request->expires_at,
         ]);
 
-        return response()->json(['message' => 'Announcement created.', 'announcement' => $announcement], 201);
+        AuditLog::record('create', 'announcements', "Admin created announcement: {$announcement->title}", ['announcement_id' => $announcement->id]);
+
+        return response()->json(['message' => 'Announcement created.', 'announcement' => $announcement->fresh()], 201);
     }
 
     public function update(Request $request, int $id)
@@ -77,12 +80,16 @@ class AdminAnnouncementController extends Controller
 
         $announcement->update($data);
 
+        AuditLog::record('update', 'announcements', "Admin updated announcement: {$announcement->title}", ['announcement_id' => $id]);
+
         return response()->json(['message' => 'Announcement updated.', 'announcement' => $announcement->fresh()]);
     }
 
     public function destroy(int $id)
     {
-        Announcement::findOrFail($id)->delete();
+        $announcement = Announcement::findOrFail($id);
+        AuditLog::record('delete', 'announcements', "Admin deleted announcement: {$announcement->title}", ['announcement_id' => $id]);
+        $announcement->delete();
 
         return response()->json(['message' => 'Announcement deleted.']);
     }

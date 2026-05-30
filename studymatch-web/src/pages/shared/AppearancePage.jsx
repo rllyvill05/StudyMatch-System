@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Sun, Moon, Monitor, ChevronDown, ChevronRight,
-  HelpCircle, Palette, Clock,
+  HelpCircle, Palette, Clock, Check,
 } from 'lucide-react'
+import { getTheme, saveTheme, applyTheme } from '../../store/themeStore'
 
 /* ─── data ──────────────────────────────────────────────────── */
 
@@ -276,13 +277,30 @@ function LivePreview({ theme, accent }) {
 /* ─── main page ─────────────────────────────────────────────── */
 
 export default function AppearancePage() {
-  const [theme, setTheme]         = useState('light')
-  const [accent, setAccent]       = useState('#7C3AED')
+  const [theme, setTheme]         = useState(() => getTheme())
+  const [accent, setAccent]       = useState(() => localStorage.getItem('user_accent') ?? '#7C3AED')
   const [fontSize, setFontSize]   = useState('Medium (Default)')
   const [fontSlider, setFontSlider] = useState(50)
   const [compactMode, setCompactMode] = useState(false)
   const [reduceMotion, setReduceMotion] = useState(false)
-  const [useSystem, setUseSystem] = useState(false)
+  const [useSystem, setUseSystem] = useState(() => getTheme() === 'system')
+  const [saved, setSaved]         = useState(false)
+
+  // Keep "use system" toggle in sync with theme selector
+  useEffect(() => {
+    if (useSystem) setTheme('system')
+  }, [useSystem])
+
+  const handleSave = () => {
+    const resolved = theme === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : theme
+    saveTheme(theme)
+    applyTheme(resolved)
+    localStorage.setItem('user_accent', accent)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
 
   return (
     <>
@@ -452,13 +470,23 @@ export default function AppearancePage() {
           </div>
 
           {/* Save */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button style={{
-              padding: '11px 28px', background: accent,
-              color: 'white', border: 'none', borderRadius: 10,
-              fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              fontFamily: 'inherit', transition: 'opacity .15s',
-            }}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
+            {saved && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 13.5, fontWeight: 600, color: '#10B981',
+              }}>
+                <Check size={15} /> Appearance saved!
+              </div>
+            )}
+            <button
+              onClick={handleSave}
+              style={{
+                padding: '11px 28px', background: accent,
+                color: 'white', border: 'none', borderRadius: 10,
+                fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'inherit', transition: 'opacity .15s',
+              }}
               onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
               onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
@@ -490,7 +518,11 @@ export default function AppearancePage() {
                 <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1E1B4B' }}>Use System Setting</div>
                 <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1 }}>Automatically switch theme based on your device.</div>
               </div>
-              <Toggle on={useSystem} onClick={() => setUseSystem(p => !p)} />
+              <Toggle on={useSystem} onClick={() => {
+                const next = !useSystem
+                setUseSystem(next)
+                if (next) setTheme('system')
+              }} />
             </div>
 
             {/* Schedule Dark Mode */}

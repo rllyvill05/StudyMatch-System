@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getUsers, deleteUser, suspendUser } from '../api/user'
-import { assignRole, revokeRole } from '../api/roles'
+import { getUsers, deleteUser, suspendUser, unsuspendUser } from '../api/user'
 
 const Badge = ({ text, color }) => (
   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>
@@ -8,16 +7,13 @@ const Badge = ({ text, color }) => (
   </span>
 )
 
-const getRoleBadge = (roles) => {
-  if (!roles || roles.length === 0)
-    return <Badge text="student" color="bg-gray-100 text-gray-600" />
-  const role = roles[0]?.name ?? roles[0]
+const getRoleBadge = (role) => {
   const colors = {
-    super_admin: 'bg-purple-100 text-purple-700',
-    admin:       'bg-indigo-100 text-indigo-700',
-    student:     'bg-gray-100 text-gray-600',
+    admin:   'bg-indigo-100 text-indigo-700',
+    tutor:   'bg-emerald-100 text-emerald-700',
+    student: 'bg-gray-100 text-gray-600',
   }
-  return <Badge text={role} color={colors[role] ?? 'bg-gray-100 text-gray-600'} />
+  return <Badge text={role ?? 'student'} color={colors[role] ?? 'bg-gray-100 text-gray-600'} />
 }
 
 export default function UsersPage() {
@@ -69,29 +65,22 @@ export default function UsersPage() {
     try {
       await suspendUser(id)
       setActionMsg('User suspended successfully.')
+      setSelected(null)
       fetchUsers()
     } catch {
       setActionMsg('Failed to suspend user.')
     }
   }
 
-  const handleAssignRole = async (userId, role) => {
+  const handleUnsuspend = async (id) => {
+    if (!confirm('Unsuspend this user?')) return
     try {
-      await assignRole(userId, role)
-      setActionMsg(`Role "${role}" assigned.`)
+      await unsuspendUser(id)
+      setActionMsg('User unsuspended successfully.')
+      setSelected(null)
       fetchUsers()
     } catch {
-      setActionMsg('Failed to assign role.')
-    }
-  }
-
-  const handleRevokeRole = async (userId, role) => {
-    try {
-      await revokeRole(userId, role)
-      setActionMsg(`Role "${role}" revoked.`)
-      fetchUsers()
-    } catch {
-      setActionMsg('Failed to revoke role.')
+      setActionMsg('Failed to unsuspend user.')
     }
   }
 
@@ -201,7 +190,7 @@ export default function UsersPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-gray-500">{user.email}</td>
-                  <td className="px-5 py-3">{getRoleBadge(user.roles)}</td>
+                  <td className="px-5 py-3">{getRoleBadge(user.role)}</td>
                   <td className="px-5 py-3 text-gray-400">
                     {new Date(user.created_at).toLocaleDateString()}
                   </td>
@@ -212,12 +201,21 @@ export default function UsersPage() {
                     >
                       View
                     </button>
-                    <button
-                      onClick={() => handleSuspend(user.id)}
-                      className="text-amber-600 hover:text-amber-800 font-medium mr-3"
-                    >
-                      Suspend
-                    </button>
+                    {user.suspended_at ? (
+                      <button
+                        onClick={() => handleUnsuspend(user.id)}
+                        className="text-emerald-600 hover:text-emerald-800 font-medium mr-3"
+                      >
+                        Unsuspend
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleSuspend(user.id)}
+                        className="text-amber-600 hover:text-amber-800 font-medium mr-3"
+                      >
+                        Suspend
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDelete(user.id)}
                       className="text-red-500 hover:text-red-700 font-medium"
@@ -292,7 +290,13 @@ export default function UsersPage() {
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
                 <span className="text-gray-500">Role</span>
-                <span>{getRoleBadge(selected.roles)}</span>
+                <span>{getRoleBadge(selected.role)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-gray-50">
+                <span className="text-gray-500">Status</span>
+                <span className={`font-medium ${selected.suspended_at ? 'text-red-500' : 'text-emerald-600'}`}>
+                  {selected.suspended_at ? 'Suspended' : 'Active'}
+                </span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
                 <span className="text-gray-500">Joined</span>
@@ -308,44 +312,23 @@ export default function UsersPage() {
               </div>
             </div>
 
-            {/* Role management */}
-            <div className="mb-5">
-              <p className="text-sm font-medium text-gray-700 mb-2">
-                Role Management
-              </p>
-              <div className="flex gap-2 flex-wrap">
-                {['admin', 'super_admin'].map(role => (
-                  <button
-                    key={role}
-                    onClick={() => handleAssignRole(selected.id, role)}
-                    className="px-3 py-1.5 text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
-                  >
-                    + Assign {role}
-                  </button>
-                ))}
-                {selected.roles?.map(r => {
-                  const roleName = r.name ?? r
-                  return (
-                    <button
-                      key={roleName}
-                      onClick={() => handleRevokeRole(selected.id, roleName)}
-                      className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-                    >
-                      - Revoke {roleName}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
             {/* Modal actions */}
             <div className="flex gap-2">
-              <button
-                onClick={() => handleSuspend(selected.id)}
-                className="flex-1 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium py-2 rounded-lg hover:bg-amber-100 transition-colors"
-              >
-                Suspend User
-              </button>
+              {selected.suspended_at ? (
+                <button
+                  onClick={() => handleUnsuspend(selected.id)}
+                  className="flex-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium py-2 rounded-lg hover:bg-emerald-100 transition-colors"
+                >
+                  Unsuspend
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleSuspend(selected.id)}
+                  className="flex-1 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium py-2 rounded-lg hover:bg-amber-100 transition-colors"
+                >
+                  Suspend User
+                </button>
+              )}
               <button
                 onClick={() => handleDelete(selected.id)}
                 className="flex-1 bg-red-50 border border-red-200 text-red-600 text-sm font-medium py-2 rounded-lg hover:bg-red-100 transition-colors"

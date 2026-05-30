@@ -56,6 +56,30 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/step-4', [ProfileController::class, 'step4']);
     Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
     Route::delete('/profile/delete-account', [ProfileController::class, 'deleteAccount']);
+    Route::post('/profile/subjects', [ProfileController::class, 'addSubject']);
+    Route::delete('/profile/subjects/{id}', [ProfileController::class, 'removeSubject']);
+
+    // User search (for complaint reporting, @mentions, etc.)
+    Route::get('/users/search', function (\Illuminate\Http\Request $request) {
+        $q    = trim($request->input('q', ''));
+        $self = $request->user()->id;
+
+        if (strlen($q) < 2) {
+            return response()->json(['users' => []]);
+        }
+
+        $users = \App\Models\User::whereNotIn('role', ['admin', 'super_admin'])
+            ->where('id', '!=', $self)
+            ->where(function ($query) use ($q) {
+                $query->where('name', 'LIKE', "%{$q}%")
+                      ->orWhere('email', 'LIKE', "%{$q}%");
+            })
+            ->select('id', 'name', 'email', 'role', 'avatar')
+            ->limit(8)
+            ->get();
+
+        return response()->json(['users' => $users]);
+    });
 
     // Students — for tutor discovery feed
     Route::get('/students', [TutorController::class, 'index']);

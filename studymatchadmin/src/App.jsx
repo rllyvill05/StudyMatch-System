@@ -6,7 +6,8 @@ import NotificationsPage from './pages/NotificationsPage'
 import SystemConfigPage from './pages/SystemConfigPage'
 import MatchMonitoringPage from './pages/MatchMonitoringPage'
 import ProfilePage from './pages/ProfilePage'
-
+import TutorsPage from './pages/TutorsPage'
+import SubjectsPage from './pages/SubjectsPage'
 
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -54,6 +55,8 @@ export default function App() {
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="system-config" element={<SystemConfigPage />} />
             <Route path="matches" element={<MatchMonitoringPage />} />
+            <Route path="tutors" element={<TutorsPage />} />
+            <Route path="subjects" element={<SubjectsPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>

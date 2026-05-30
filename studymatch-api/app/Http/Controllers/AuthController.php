@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Notification;
 use App\Models\User;
 use App\Models\Student;
 use App\Models\Tutor;
@@ -10,7 +11,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -52,6 +52,22 @@ class AuthController extends Controller
             $m->to($user->email)
               ->subject('StudyMatch - Email Verification Code');
         });
+
+        if ($role === 'tutor') {
+            Notification::notifyAdmins(
+                'warning',
+                'New Tutor Verification Request',
+                "{$user->name} registered as a tutor and is pending verification.",
+                ['user_id' => $user->id]
+            );
+        } else {
+            Notification::notifyAdmins(
+                'info',
+                'New Student Registered',
+                "{$user->name} just created a student account.",
+                ['user_id' => $user->id]
+            );
+        }
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -273,18 +289,42 @@ class AuthController extends Controller
             }
         }
 
+        // Parse tutor bio JSON (stored during registration) to extract clean fields
+        $tutorBioData   = null;
+        $tutorBioRaw    = $user->tutor?->bio;
+        if ($tutorBioRaw) {
+            $decoded = json_decode($tutorBioRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $tutorBioData = $decoded;
+            }
+        }
+
+        $tutorDepartment  = $tutorBioData['department']    ?? $user->tutor?->specialization;
+        $tutorPersonalBio = $tutorBioData['personal_bio']  ?? null;
+        $personalBio      = $user->bio
+            ?? $user->student?->bio
+            ?? $tutorPersonalBio;
+
+        // Resolve avatar to a full public URL
+        $avatarUrl = null;
+        if ($user->avatar) {
+            $avatarUrl = filter_var($user->avatar, FILTER_VALIDATE_URL)
+                ? $user->avatar
+                : asset('storage/' . $user->avatar);
+        }
+
         return [
             'id'                 => (string) $user->id,
             'fullName'           => $user->name,
             'email'              => $user->email,
-            'profilePhotoUrl'    => $user->avatar,
+            'profilePhotoUrl'    => $avatarUrl,
             'school'             => null,
-            'department'         => $user->student?->program ?? $user->tutor?->specialization,
-            'topic'              => null,
+            'department'         => $user->student?->program ?? $tutorDepartment,
+            'topic'              => $user->tutor?->position,
             'yearLevel'          => $user->student?->year_level,
             'dateOfBirth'        => $user->date_of_birth?->format('Y-m-d'),
             'gender'             => $user->gender,
-            'bio'                => $user->bio ?? $user->student?->bio ?? $user->tutor?->bio,
+            'bio'                => $personalBio,
             'role'               => $user->role,
             'subjects'           => $user->isStudent() ? $weakNames : $strongNames,
             'learningStyles'     => $user->learning_styles ?? [],

@@ -26,12 +26,15 @@ class StudyMatchApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppState(),
-      child: MaterialApp(
-        title: 'StudyMatch',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        home: const AppRouter(),
+      child: Consumer<AppState>(
+        builder: (_, state, __) => MaterialApp(
+          title: 'StudyMatch',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: state.themeMode,
+          home: const AppRouter(),
+        ),
       ),
     );
   }

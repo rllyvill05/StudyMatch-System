@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { getMyFeedback, submitFeedback } from '../../api/feedback'
-import { Star, Send, CheckCircle, Loader2, RefreshCw } from 'lucide-react'
+import { getMatchRequests } from '../../api/matchRequests'
+import { getSessions } from '../../api/sessions'
+import { Star, Send, CheckCircle, Loader2, ChevronDown } from 'lucide-react'
 
 const TYPES = ['General', 'Bug Report', 'Feature Request', 'Tutor Feedback', 'Session Feedback']
 
@@ -35,6 +37,14 @@ export default function FeedbackPage() {
   const [success,   setSuccess]   = useState(false)
 
   const [form, setForm] = useState({ type: 'General', message: '', rating: 0 })
+  const [selectedTutor,   setSelectedTutor]   = useState('')
+  const [selectedSession, setSelectedSession] = useState('')
+  const [tutors,    setTutors]    = useState([])
+  const [sessions,  setSessions]  = useState([])
+  const [loadingExtra, setLoadingExtra] = useState(false)
+
+  const isTutorType   = form.type === 'Tutor Feedback'
+  const isSessionType = form.type === 'Session Feedback'
 
   const fetchFeedback = async () => {
     setLoading(true)
@@ -46,17 +56,81 @@ export default function FeedbackPage() {
     finally { setLoading(false) }
   }
 
+  // Load tutors from accepted match requests
+  const fetchTutors = async () => {
+    setLoadingExtra(true)
+    try {
+      const res  = await getMatchRequests()
+      const list = res?.data || res || []
+      const arr  = Array.isArray(list) ? list : []
+      // Keep accepted matches; extract the other party's name/id
+      const tutorList = arr
+        .filter(r => r.status === 'accepted')
+        .map(r => {
+          const tutor = r.tutor ?? r.tutor_user ?? r.other_user
+          const name  = tutor?.user?.name ?? tutor?.name ?? r.tutor_name ?? null
+          const id    = tutor?.id ?? r.tutor_id ?? null
+          return name ? { id, name } : null
+        })
+        .filter(Boolean)
+        .filter((t, i, a) => a.findIndex(x => x.name === t.name) === i) // dedupe
+      setTutors(tutorList)
+    } catch {}
+    finally { setLoadingExtra(false) }
+  }
+
+  // Load completed/upcoming sessions
+  const fetchSessions = async () => {
+    setLoadingExtra(true)
+    try {
+      const res  = await getSessions()
+      const list = res?.data || res?.sessions || res || []
+      const arr  = Array.isArray(list) ? list : []
+      setSessions(arr.slice(0, 30)) // cap at 30 most recent
+    } catch {}
+    finally { setLoadingExtra(false) }
+  }
+
   useEffect(() => { fetchFeedback() }, [])
 
+  // When type changes load the relevant data
+  useEffect(() => {
+    setSelectedTutor('')
+    setSelectedSession('')
+    if (isTutorType)   fetchTutors()
+    if (isSessionType) fetchSessions()
+  }, [form.type])
+
+  const buildMessage = () => {
+    let prefix = ''
+    if (isTutorType && selectedTutor) {
+      const t = tutors.find(t => String(t.id) === String(selectedTutor))
+      if (t) prefix = `[Tutor: ${t.name}]\n`
+    }
+    if (isSessionType && selectedSession) {
+      const s = sessions.find(s => String(s.id) === String(selectedSession))
+      if (s) {
+        const dateStr = s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : `#${s.id}`
+        const tutorName = s.tutor?.user?.name ?? s.tutor_name ?? ''
+        prefix = `[Session: ${dateStr}${tutorName ? ` with ${tutorName}` : ''}]\n`
+      }
+    }
+    return prefix + form.message
+  }
+
   const handleSubmit = async () => {
+    if (isTutorType && !selectedTutor)     { setError('Please select a tutor.'); return }
+    if (isSessionType && !selectedSession)  { setError('Please select a session.'); return }
     if (!form.message.trim()) { setError('Please enter a message.'); return }
     if (form.rating === 0)    { setError('Please select a rating.'); return }
     setError('')
     setSubmitting(true)
     try {
-      await submitFeedback(form.type, form.message, form.rating)
+      await submitFeedback(form.type, buildMessage(), form.rating)
       setSuccess(true)
       setForm({ type: 'General', message: '', rating: 0 })
+      setSelectedTutor('')
+      setSelectedSession('')
       fetchFeedback()
       setTimeout(() => setSuccess(false), 4000)
     } catch {
@@ -104,6 +178,82 @@ export default function FeedbackPage() {
               </select>
             </div>
 
+            {/* Tutor selector — shown when "Tutor Feedback" is selected */}
+            {isTutorType && (
+              <div>
+                <label className="fb-label">
+                  Select Tutor
+                  <span style={{ fontWeight: 400, color: '#EF4444', marginLeft: 4 }}>*</span>
+                </label>
+                {loadingExtra ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: '1.5px solid #E5E7EB', borderRadius: 10, fontSize: 13, color: '#9CA3AF' }}>
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Loading tutors...
+                  </div>
+                ) : tutors.length === 0 ? (
+                  <div style={{ padding: '10px 14px', border: '1.5px dashed #E5E7EB', borderRadius: 10, fontSize: 13, color: '#9CA3AF', background: '#F9FAFB' }}>
+                    No matched tutors found. Match with a tutor first to leave tutor feedback.
+                  </div>
+                ) : (
+                  <select className="fb-input" value={selectedTutor} onChange={e => setSelectedTutor(e.target.value)}>
+                    <option value="">— Select a tutor —</option>
+                    {tutors.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            {/* Session selector — shown when "Session Feedback" is selected */}
+            {isSessionType && (
+              <div>
+                <label className="fb-label">
+                  Select Session
+                  <span style={{ fontWeight: 400, color: '#EF4444', marginLeft: 4 }}>*</span>
+                </label>
+                {loadingExtra ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: '1.5px solid #E5E7EB', borderRadius: 10, fontSize: 13, color: '#9CA3AF' }}>
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Loading sessions...
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div style={{ padding: '10px 14px', border: '1.5px dashed #E5E7EB', borderRadius: 10, fontSize: 13, color: '#9CA3AF', background: '#F9FAFB' }}>
+                    No sessions found. Book a study session first to leave session feedback.
+                  </div>
+                ) : (
+                  <select className="fb-input" value={selectedSession} onChange={e => setSelectedSession(e.target.value)}>
+                    <option value="">— Select a session —</option>
+                    {sessions.map(s => {
+                      const date     = s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : `Session #${s.id}`
+                      const tutorName = s.tutor?.user?.name ?? s.tutor_name ?? ''
+                      const status   = s.status ? ` (${s.status})` : ''
+                      return (
+                        <option key={s.id} value={s.id}>
+                          {date}{tutorName ? ` — ${tutorName}` : ''}{status}
+                        </option>
+                      )
+                    })}
+                  </select>
+                )}
+
+                {/* Preview selected session detail */}
+                {selectedSession && (() => {
+                  const s = sessions.find(x => String(x.id) === String(selectedSession))
+                  if (!s) return null
+                  return (
+                    <div style={{ marginTop: 8, padding: '10px 14px', background: '#F3F0FF', border: '1px solid #DDD6FE', borderRadius: 10, fontSize: 12.5 }}>
+                      <span style={{ fontWeight: 600, color: '#7C3AED' }}>Session details: </span>
+                      <span style={{ color: '#4B5563' }}>
+                        {s.scheduled_at ? new Date(s.scheduled_at).toLocaleString() : '—'}
+                        {s.tutor?.user?.name ? ` · Tutor: ${s.tutor.user.name}` : ''}
+                        {s.subject?.name ? ` · ${s.subject.name}` : ''}
+                        {s.status ? ` · ${s.status}` : ''}
+                      </span>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+
             {/* Rating */}
             <div>
               <label className="fb-label">Rating</label>
@@ -117,7 +267,11 @@ export default function FeedbackPage() {
                 className="fb-input" rows={5}
                 value={form.message}
                 onChange={e => setForm(p => ({ ...p, message: e.target.value }))}
-                placeholder="Share your thoughts, suggestions, or report an issue..."
+                placeholder={
+                  isTutorType   ? 'Share your experience with this tutor...' :
+                  isSessionType ? 'How did the session go? What could be improved?' :
+                  'Share your thoughts, suggestions, or report an issue...'
+                }
                 style={{ resize: 'vertical' }}
               />
             </div>

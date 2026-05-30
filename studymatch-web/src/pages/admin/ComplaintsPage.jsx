@@ -93,7 +93,7 @@ export default function AdminComplaintsPage() {
           {complaints.map((c) => {
             const ss = STATUS_STYLE[c.status]  || STATUS_STYLE.open
             const ps = PRIORITY_STYLE[c.priority] || PRIORITY_STYLE.medium
-            const submitter = c.submitted_by?.name || 'Unknown'
+            const submitter = c.submitted_by?.name || c.submittedBy?.name || 'Unknown'
             const date = c.created_at
               ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
               : ''

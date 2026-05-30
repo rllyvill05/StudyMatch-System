@@ -31,13 +31,15 @@ export default function LoginPage() {
 
       const user = res.data.user
 
+      if (user.role === 'super_admin') {
+        setError('This account requires the Desktop Admin Console. Please use the StudyMatch desktop app.')
+        return
+      }
       if (user.role === 'admin') {
         navigate('/admin/dashboard')
-      }
-      else if (user.role === 'tutor') {
+      } else if (user.role === 'tutor') {
         navigate('/tutor/dashboard')
-      }
-      else {
+      } else {
         navigate('/student/dashboard')
       }
 

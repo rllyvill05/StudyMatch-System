@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Users, GraduationCap, ShieldCheck,
+  LayoutDashboard, Users, GraduationCap,
   Flag, FileText, Megaphone, BookOpen, Settings,
-  LogOut, ChevronRight, ChevronDown,
+  LogOut, ChevronDown,
   PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import { getUser, clearAuth } from '../../store/authStore'
@@ -12,34 +12,14 @@ import logo from '../../assets/logo.png'
 /* ─── nav config ─────────────────────────────────────────────── */
 
 const NAV = [
-  { icon: LayoutDashboard, label: 'Dashboard',     to: '/admin/dashboard' },
-  { icon: Users,           label: 'Users',          to: '/admin/users', arrow: true },
-  {
-    icon: GraduationCap, label: 'Tutors',
-    children: [
-      { label: 'All Tutors', to: '/admin/tutors'         },
-      { label: 'Pending',    to: '/admin/tutors/pending'  },
-    ],
-  },
-  { icon: ShieldCheck, label: 'Verification', to: '/admin/verification' },
-  {
-    icon: Flag, label: 'Reports',
-    children: [
-      { label: 'All Reports', to: '/admin/reports'          },
-      { label: 'Pending',     to: '/admin/reports/pending'  },
-      { label: 'Resolved',    to: '/admin/reports/resolved' },
-    ],
-  },
-  {
-    icon: FileText, label: 'Content',
-    children: [
-      { label: 'Resources',  to: '/admin/resources'  },
-      { label: 'Moderation', to: '/admin/moderation' },
-    ],
-  },
-  { icon: Megaphone, label: 'Announcements', to: '/admin/announcements' },
-  { icon: BookOpen,  label: 'Resources',     to: '/admin/resources'     },
-  { icon: Settings,  label: 'Settings',      to: '/admin/settings'      },
+  { icon: LayoutDashboard, label: 'Dashboard',     to: '/admin/dashboard'     },
+  { icon: Users,           label: 'Users',          to: '/admin/users'         },
+  { icon: GraduationCap,   label: 'Tutors',         to: '/admin/tutors'        },
+  { icon: Flag,            label: 'Complaints',     to: '/admin/complaints'    },
+  { icon: FileText,        label: 'Reports',        to: '/admin/reports'       },
+  { icon: Megaphone,       label: 'Announcements',  to: '/admin/announcements' },
+  { icon: BookOpen,        label: 'Resources',      to: '/admin/resources'     },
+  { icon: Settings,        label: 'Settings',       to: '/admin/settings'      },
 ]
 
 /* ─── component ──────────────────────────────────────────────── */
@@ -212,7 +192,6 @@ export default function AdminSidebar() {
                     <item.icon size={17} color={isActive(item.to) ? '#7C3AED' : '#6B7280'} />
                     {item.label}
                   </div>
-                  {item.arrow && <ChevronRight size={14} color="#9CA3AF" />}
                 </Link>
               )
             })}
@@ -233,7 +212,7 @@ export default function AdminSidebar() {
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#1E1B4B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {user?.name || 'Admin'}
                     </div>
-                    <div style={{ fontSize: 11.5, color: '#9CA3AF' }}>Super Administrator</div>
+                    <div style={{ fontSize: 11.5, color: '#9CA3AF' }}>{user?.role === 'super_admin' ? 'Super Admin' : 'Administrator'}</div>
                   </div>
                   <ChevronDown size={14} color="#9CA3AF" style={{ flexShrink: 0 }} />
                 </div>

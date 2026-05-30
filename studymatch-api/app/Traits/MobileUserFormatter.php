@@ -27,19 +27,40 @@ trait MobileUserFormatter
                 ->all();
         }
 
+        // Parse tutor.bio JSON (stored during web registration) to extract clean fields
+        $tutorBioData = null;
+        if ($user->tutor?->bio) {
+            $decoded = json_decode($user->tutor->bio, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $tutorBioData = $decoded;
+            }
+        }
+
+        $tutorDepartment  = $tutorBioData['department']   ?? $user->tutor?->specialization;
+        $tutorPersonalBio = $tutorBioData['personal_bio'] ?? null;
+        $personalBio      = $user->bio ?? $user->student?->bio ?? $tutorPersonalBio;
+
+        // Avatar: full public URL
+        $avatarUrl = null;
+        if ($user->avatar) {
+            $avatarUrl = filter_var($user->avatar, FILTER_VALIDATE_URL)
+                ? $user->avatar
+                : asset('storage/' . $user->avatar);
+        }
+
         return [
             'id'                 => (string) $user->id,
             'fullName'           => $user->name,
             'email'              => $user->email,
             'phoneNumber'        => $user->phone,
-            'profilePhotoUrl'    => $user->avatar,
+            'profilePhotoUrl'    => $avatarUrl,
             'school'             => null,
-            'department'         => $user->student?->program ?? $user->tutor?->specialization,
-            'topic'              => null,
+            'department'         => $user->student?->program ?? $tutorDepartment,
+            'topic'              => $user->tutor?->position,
             'yearLevel'          => $user->student?->year_level,
             'dateOfBirth'        => $user->date_of_birth?->format('Y-m-d'),
             'gender'             => $user->gender,
-            'bio'                => $user->bio ?? $user->student?->bio ?? $user->tutor?->bio,
+            'bio'                => $personalBio,
             'role'               => $user->role,
             'subjects'           => $user->isStudent() ? $weakNames : $strongNames,
             'learningStyles'     => $user->learning_styles ?? [],

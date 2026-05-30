@@ -73,7 +73,7 @@ export default function TutorStudySessionsPage() {
 
   const totalHours = Math.round(thisWeekSessions.reduce((s, x) => s + (x.duration_minutes || 60), 0) / 60 * 10) / 10
   const uniqueStudents = new Set(thisWeekSessions.map(s => s.student_id)).size
-  const totalEarnings = thisWeekSessions.reduce((sum, s) => sum + parseFloat(s.tutor?.hourly_rate || 0) * ((s.duration_minutes || 60) / 60), 0)
+  const totalEarnings = 0 // payment methods removed
 
   const handleAccept = async (id) => {
     try {

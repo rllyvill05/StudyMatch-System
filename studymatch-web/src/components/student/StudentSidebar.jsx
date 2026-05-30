@@ -8,6 +8,7 @@ import {
   MessageCircle, Calendar, Library,
   UserCircle, Settings, HelpCircle, ChevronDown,
   ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen,
+  Star, Flag,
 } from 'lucide-react'
 
 /* ─── nav config ─────────────────────────────────────────────── */
@@ -20,6 +21,8 @@ const NAV_LINKS = [
   { icon: Calendar,        label: 'My Schedule',    to: '/student/schedule'       },
   { icon: Library,         label: 'Resources',      to: '/student/resources'      },
   { icon: UserCircle,      label: 'Profile',        to: '/student/profile'        },
+  { icon: Star,            label: 'Feedback',       to: '/student/feedback'       },
+  { icon: Flag,            label: 'Complaints',     to: '/student/complaints'     },
 ]
 
 const SETTINGS_LINKS = [

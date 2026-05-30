@@ -161,7 +161,14 @@ export default function NotificationDropdown() {
                       <Icon size={16} color={color} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: isUnread ? 700 : 500, color: '#1E1B4B', lineHeight: 1.4 }}>{msg}</div>
+                      <div style={{ fontSize: 13, fontWeight: isUnread ? 700 : 500, color: '#1E1B4B', lineHeight: 1.4 }}>
+                        {n.title || msg}
+                      </div>
+                      {n.title && n.message && (
+                        <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                          {n.message}
+                        </div>
+                      )}
                       <div style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 3 }}>{timeAgo(n.created_at)}</div>
                     </div>
                     {isUnread && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#7C3AED', flexShrink: 0, marginTop: 4 }} />}

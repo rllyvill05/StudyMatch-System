@@ -15,6 +15,8 @@ enum StudentNav {
   profile,
   settings,
   help,
+  complaints,
+  feedback,
 }
 
 extension StudentNavX on StudentNav {
@@ -32,6 +34,8 @@ extension StudentNavX on StudentNav {
         StudentNav.profile => 'Profile',
         StudentNav.settings => 'Settings',
         StudentNav.help => 'Help Center',
+        StudentNav.complaints => 'Complaints',
+        StudentNav.feedback => 'Feedback',
       };
 
   IconData get icon => switch (this) {
@@ -48,6 +52,8 @@ extension StudentNavX on StudentNav {
         StudentNav.profile => Icons.person_outline_rounded,
         StudentNav.settings => Icons.settings_outlined,
         StudentNav.help => Icons.help_outline_rounded,
+        StudentNav.complaints => Icons.flag_outlined,
+        StudentNav.feedback => Icons.chat_bubble_outline_rounded,
       };
 
   IconData get activeIcon => switch (this) {
@@ -64,6 +70,8 @@ extension StudentNavX on StudentNav {
         StudentNav.profile => Icons.person_rounded,
         StudentNav.settings => Icons.settings_rounded,
         StudentNav.help => Icons.help_rounded,
+        StudentNav.complaints => Icons.flag_rounded,
+        StudentNav.feedback => Icons.chat_bubble_rounded,
       };
 
   bool get showMessageBadge => this == StudentNav.messages;
@@ -81,5 +89,6 @@ const List<StudentNav> studentPrimaryNav = [
   StudentNav.assignments,
   StudentNav.schedule,
   StudentNav.resources,
+  StudentNav.complaints,
   StudentNav.profile,
 ];

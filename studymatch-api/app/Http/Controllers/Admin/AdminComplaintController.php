@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Complaint;
 use Illuminate\Http\Request;
 
@@ -57,6 +58,8 @@ class AdminComplaintController extends Controller
             'resolved_by'      => in_array($request->status, ['resolved', 'dismissed']) ? $admin->id : $complaint->resolved_by,
             'resolved_at'      => in_array($request->status, ['resolved', 'dismissed']) ? now() : $complaint->resolved_at,
         ]);
+
+        AuditLog::record('update', 'complaints', "Admin updated complaint #{$id} status to {$request->status}", ['complaint_id' => $id, 'status' => $request->status]);
 
         return response()->json(['message' => 'Complaint updated.', 'complaint' => $complaint->fresh()]);
     }

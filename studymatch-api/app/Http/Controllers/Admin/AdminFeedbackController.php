@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Feedback;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 
 class AdminFeedbackController extends Controller
@@ -35,6 +37,19 @@ class AdminFeedbackController extends Controller
         ]);
 
         $feedback->update($request->only(['status', 'admin_notes']));
+
+        // Notify the user if their feedback was flagged (so they're aware it's been seen)
+        if ($request->status === 'flagged') {
+            Notification::send(
+                $feedback->user_id,
+                'system',
+                'Feedback received',
+                'Thank you — your feedback has been reviewed and flagged for action by our team.',
+                ['feedback_id' => $feedback->id]
+            );
+        }
+
+        AuditLog::record('update', 'feedback', "Admin marked feedback #{$id} as {$request->status}", ['feedback_id' => $id, 'status' => $request->status]);
 
         return response()->json(['message' => 'Feedback updated.', 'feedback' => $feedback->fresh()]);
     }

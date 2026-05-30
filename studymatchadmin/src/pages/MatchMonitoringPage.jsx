@@ -38,7 +38,7 @@ export default function MatchMonitoringPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await api.get('/admin/matches', {
+      const res = await api.get('/admin/match-requests', {
         params: {
           page:   p,
           status: s || undefined,

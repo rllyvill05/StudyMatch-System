@@ -15,6 +15,10 @@ import 'profile_screen.dart';
 import 'my_matches_screen.dart';
 import 'placeholder_screen.dart';
 import 'settings_screen.dart';
+import 'help_center_screen.dart';
+import 'complaints_screen.dart';
+import 'my_subjects_screen.dart';
+import 'find_students_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -53,10 +57,11 @@ class _MainShellState extends State<MainShell> {
     _navigate(_bottomNavItems[index]);
   }
 
-  Widget _screenFor(StudentNav nav) {
+  Widget _screenFor(StudentNav nav, {bool isTutor = false}) {
     return switch (nav) {
       StudentNav.dashboard => const DashboardScreen(),
-      StudentNav.findTutors => const MatchScreen(),
+      StudentNav.findTutors =>
+        isTutor ? const FindStudentsScreen() : const MatchScreen(),
       StudentNav.myMatches => const MyMatchesScreen(),
       StudentNav.studySessions => const SessionsScreen(),
       StudentNav.mySubjects => const PlaceholderScreen(
@@ -83,6 +88,10 @@ class _MainShellState extends State<MainShell> {
           message: 'Get support and browse help articles.',
           icon: Icons.help_rounded,
         ),
+      // TODO: Handle this case.
+      StudentNav.complaints => throw UnimplementedError(),
+      // TODO: Handle this case.
+      StudentNav.feedback => throw UnimplementedError(),
     };
   }
 
@@ -100,7 +109,7 @@ class _MainShellState extends State<MainShell> {
         key: _scaffoldKey,
         backgroundColor: AppTheme.bgLight,
         drawer: const StudentDrawer(),
-        body: _screenFor(_current),
+        body: _screenFor(_current, isTutor: isTutor),
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             color: Colors.white,

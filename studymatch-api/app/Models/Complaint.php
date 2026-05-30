@@ -23,6 +23,11 @@ class Complaint extends Model
         return $this->belongsTo(User::class, 'submitted_by');
     }
 
+    public function submitter()
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
     public function reportedUser()
     {
         return $this->belongsTo(User::class, 'reported_user_id');

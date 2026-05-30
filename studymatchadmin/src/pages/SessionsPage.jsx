@@ -3,9 +3,9 @@ import { getSessions, cancelSession } from '../api/session'
 
 const StatusBadge = ({ status }) => {
   const styles = {
-    active:    'bg-emerald-100 text-emerald-700',
+    ongoing:   'bg-emerald-100 text-emerald-700',
     completed: 'bg-blue-100 text-blue-700',
-    pending:   'bg-amber-100 text-amber-700',
+    scheduled: 'bg-amber-100 text-amber-700',
     cancelled: 'bg-red-100 text-red-600',
   }
   return (
@@ -97,7 +97,7 @@ export default function SessionsPage() {
 
       {/* Filters */}
       <div className="flex gap-2">
-        {['', 'active', 'pending', 'completed', 'cancelled'].map(s => (
+        {['', 'scheduled', 'ongoing', 'completed', 'cancelled'].map(s => (
           <button
             key={s}
             onClick={() => handleStatusFilter(s)}
@@ -125,11 +125,11 @@ export default function SessionsPage() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left px-5 py-3 text-gray-500 font-medium">ID</th>
-              <th className="text-left px-5 py-3 text-gray-500 font-medium">Host</th>
-              <th className="text-left px-5 py-3 text-gray-500 font-medium">Partner</th>
+              <th className="text-left px-5 py-3 text-gray-500 font-medium">Tutor</th>
+              <th className="text-left px-5 py-3 text-gray-500 font-medium">Student</th>
               <th className="text-left px-5 py-3 text-gray-500 font-medium">Subject</th>
               <th className="text-left px-5 py-3 text-gray-500 font-medium">Status</th>
-              <th className="text-left px-5 py-3 text-gray-500 font-medium">Started</th>
+              <th className="text-left px-5 py-3 text-gray-500 font-medium">Scheduled</th>
               <th className="text-left px-5 py-3 text-gray-500 font-medium">Actions</th>
             </tr>
           </thead>
@@ -154,21 +154,21 @@ export default function SessionsPage() {
                 >
                   <td className="px-5 py-3 text-gray-400">{session.id}</td>
                   <td className="px-5 py-3 font-medium text-gray-800">
-                    {session.host?.name ?? '—'}
+                    {session.tutor?.user?.name ?? session.tutor?.name ?? '—'}
                   </td>
                   <td className="px-5 py-3 text-gray-600">
-                    {session.partner?.name ?? '—'}
+                    {session.student?.user?.name ?? session.student?.name ?? '—'}
                   </td>
                   <td className="px-5 py-3">
                     <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-xs font-medium">
-                      {session.subject}
+                      {session.subject?.name ?? session.subject ?? '—'}
                     </span>
                   </td>
                   <td className="px-5 py-3">
                     <StatusBadge status={session.status} />
                   </td>
                   <td className="px-5 py-3 text-gray-400 text-xs">
-                    {formatDate(session.started_at)}
+                    {formatDate(session.scheduled_at)}
                   </td>
                   <td className="px-5 py-3">
                     <button
@@ -237,7 +237,9 @@ export default function SessionsPage() {
             {/* Subject banner */}
             <div className="bg-indigo-50 rounded-xl px-4 py-3 mb-5 text-center">
               <p className="text-xs text-indigo-400 font-medium mb-0.5">Subject</p>
-              <p className="text-indigo-700 font-bold text-lg">{selected.subject}</p>
+              <p className="text-indigo-700 font-bold text-lg">
+                {selected.subject?.name ?? selected.subject ?? '—'}
+              </p>
             </div>
 
             {/* Details */}
@@ -251,27 +253,27 @@ export default function SessionsPage() {
                 <StatusBadge status={selected.status} />
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Host</span>
+                <span className="text-gray-500">Tutor</span>
                 <span className="font-medium text-gray-700">
-                  {selected.host?.name ?? '—'}
+                  {selected.tutor?.user?.name ?? selected.tutor?.name ?? '—'}
                 </span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Partner</span>
+                <span className="text-gray-500">Student</span>
                 <span className="font-medium text-gray-700">
-                  {selected.partner?.name ?? '—'}
+                  {selected.student?.user?.name ?? selected.student?.name ?? '—'}
                 </span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Started</span>
+                <span className="text-gray-500">Scheduled</span>
                 <span className="text-gray-600 text-xs">
-                  {formatDate(selected.started_at)}
+                  {formatDate(selected.scheduled_at)}
                 </span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Ended</span>
+                <span className="text-gray-500">Completed</span>
                 <span className="text-gray-600 text-xs">
-                  {formatDate(selected.ended_at)}
+                  {formatDate(selected.completed_at)}
                 </span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
@@ -280,6 +282,19 @@ export default function SessionsPage() {
                   {selected.duration_minutes ? `${selected.duration_minutes} min` : '—'}
                 </span>
               </div>
+              {selected.session_link && (
+                <div className="flex justify-between py-2 border-b border-gray-50">
+                  <span className="text-gray-500">Session Link</span>
+                  <a
+                    href={selected.session_link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-indigo-600 hover:text-indigo-800 text-xs font-medium truncate max-w-48"
+                  >
+                    {selected.session_link}
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* Modal actions */}
