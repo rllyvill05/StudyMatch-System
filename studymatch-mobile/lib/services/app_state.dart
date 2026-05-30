@@ -27,8 +27,18 @@ class AppState extends ChangeNotifier {
   bool _loadingUsers = false;
   bool _loadingResources = false;
   final List<Conversation> _conversations = [];
+  List<NotificationItem> _notifications = [];
+  ThemeMode _themeMode = ThemeMode.system;
 
   UserModel? get currentUser => _currentUser;
+  ThemeMode get themeMode => _themeMode;
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_mode', mode.name);
+  }
   bool get isLoggedIn => _currentUser != null;
   int get onboardingStep => _onboardingStep;
   List<RealUser> get matchUsers => List.unmodifiable(_matchUsers);
@@ -39,9 +49,13 @@ class AppState extends ChangeNotifier {
   bool get loadingUsers => _loadingUsers;
   bool get loadingResources => _loadingResources;
   List<Conversation> get conversations => List.unmodifiable(_conversations);
+  List<NotificationItem> get notifications => List.unmodifiable(_notifications);
 
   int get unreadMessageCount =>
       _conversations.fold(0, (sum, c) => sum + c.unreadCount);
+
+  int get unreadNotificationCount =>
+      _notifications.where((n) => !n.isRead).length;
 
   AuthState get authState {
     if (_currentUser == null) return AuthState.unauthenticated;
@@ -57,6 +71,16 @@ class AppState extends ChangeNotifier {
   Future<void> _loadSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // Restore saved theme preference
+      final savedTheme = prefs.getString('theme_mode');
+      if (savedTheme != null) {
+        _themeMode = ThemeMode.values.firstWhere(
+          (m) => m.name == savedTheme,
+          orElse: () => ThemeMode.system,
+        );
+      }
+
       final raw = prefs.getString('sm_session');
       if (raw != null) {
         final decoded = jsonDecode(raw);
@@ -99,6 +123,7 @@ class AppState extends ChangeNotifier {
             await loadSessions();
             await loadMatchUsers();
             await loadResources();
+            await fetchNotifications();
           }
         }
       }
@@ -234,6 +259,53 @@ class AppState extends ChangeNotifier {
       _dbResources = [];
     }
     _loadingResources = false;
+    notifyListeners();
+  }
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  Future<void> fetchNotifications() async {
+    try {
+      final res = await ApiService.getNotifications();
+      final raw = res['data'];
+      if (raw is List) {
+        _notifications = raw
+            .whereType<Map<String, dynamic>>()
+            .map(NotificationItem.fromJson)
+            .toList();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> markNotificationRead(int id) async {
+    await ApiService.markNotificationRead(id);
+    _notifications = _notifications
+        .map((n) => n.id == id
+            ? NotificationItem(
+                id: n.id,
+                type: n.type,
+                title: n.title,
+                message: n.message,
+                isRead: true,
+                createdAt: n.createdAt,
+              )
+            : n)
+        .toList();
+    notifyListeners();
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await ApiService.markAllNotificationsRead();
+    _notifications = _notifications
+        .map((n) => NotificationItem(
+              id: n.id,
+              type: n.type,
+              title: n.title,
+              message: n.message,
+              isRead: true,
+              createdAt: n.createdAt,
+            ))
+        .toList();
     notifyListeners();
   }
 

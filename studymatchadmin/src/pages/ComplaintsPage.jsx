@@ -209,7 +209,7 @@ export default function ComplaintsPage() {
                     {c.subject}
                   </td>
                   <td className="px-5 py-3 text-gray-600">
-                    {c.submitter?.name ?? '—'}
+                    {c.submitted_by?.name ?? c.submitter?.name ?? '—'}
                   </td>
                   <td className="px-5 py-3 text-gray-600">
                     {c.reported_user?.name ?? '—'}
@@ -295,7 +295,7 @@ export default function ComplaintsPage() {
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
                 <span className="text-gray-500">Submitted by</span>
-                <span className="font-medium">{selected.submitter?.name ?? '—'}</span>
+                <span className="font-medium">{selected.submitted_by?.name ?? selected.submitter?.name ?? '—'}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-50">
                 <span className="text-gray-500">Reported user</span>

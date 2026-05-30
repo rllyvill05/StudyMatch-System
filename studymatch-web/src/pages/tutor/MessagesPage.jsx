@@ -2,17 +2,21 @@ import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { getConversations, getConversation, sendMessage, sendFile } from '../../api/chat'
 import { getMatchRequests } from '../../api/matchRequests'
+import { getAnnouncements } from '../../api/announcements'
 import { getUser } from '../../store/authStore'
 import {
   Search, Video, Phone, MoreVertical, Paperclip,
   Image, FileText, Smile, Send, Users, MessageSquare,
   Share2, Megaphone, LayoutTemplate, ChevronRight,
+  ChevronDown, ChevronUp,
   Loader2, Calendar,
 } from 'lucide-react'
 
 const COLORS = ['#EC4899','#7C3AED','#10B981','#6366F1','#F59E0B','#EF4444']
 const getColor    = (i) => COLORS[i % COLORS.length]
 const getInitials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'
+
+const ANNOUNCEMENTS_ID = '__announcements__'
 
 function formatTime(ts) {
   if (!ts) return ''
@@ -33,7 +37,6 @@ function Avatar({ name = '', color = '#7C3AED', size = 42, online, isGroup }) {
 const QUICK_ACTIONS = [
   { icon: MessageSquare, label: 'Start a New Conversation', color: '#7C3AED', bg: '#F3F0FF' },
   { icon: Share2,        label: 'Share a Resource',         color: '#6366F1', bg: '#EEF2FF' },
-  { icon: Megaphone,     label: 'Create Announcement',      color: '#F59E0B', bg: '#FFFBEB' },
   { icon: LayoutTemplate,label: 'Message Templates',        color: '#10B981', bg: '#F0FDF4' },
 ]
 
@@ -43,8 +46,6 @@ function buildMeetUrl(meId, partnerId, mode = 'video') {
   const min = Math.min(a, b)
   const max = Math.max(a, b)
   const room = `studymatch-${min}-${max}`
-
-  // Jitsi public instance. Audio-only is implemented by starting with video muted.
   const base = `https://meet.jit.si/${encodeURIComponent(room)}`
   const config = mode === 'audio' ? 'config.startWithVideoMuted=true' : ''
   return config ? `${base}#${config}` : base
@@ -54,7 +55,7 @@ export default function TutorMessagesPage() {
   const me = getUser()
   const location = useLocation()
   const [convs,        setConvs]        = useState([])
-  const [activeId,     setActiveId]     = useState(null)
+  const [activeId,     setActiveId]     = useState(ANNOUNCEMENTS_ID)
   const [messages,     setMessages]     = useState([])
   const [input,        setInput]        = useState('')
   const [search,       setSearch]       = useState('')
@@ -65,8 +66,13 @@ export default function TutorMessagesPage() {
   const bottomRef    = useRef(null)
   const prevCountRef = useRef(0)
   const fileRef      = useRef(null)
-  const [showEmoji,   setShowEmoji]   = useState(false)
-  const [sendingFile, setSendingFile] = useState(false)
+  const [showEmoji,   setShowEmoji]    = useState(false)
+  const [sendingFile, setSendingFile]  = useState(false)
+
+  // Announcements
+  const [announcements, setAnnouncements] = useState([])
+  const [expandedAnn,   setExpandedAnn]   = useState(null)
+  const [annUnread,     setAnnUnread]     = useState(0)
 
   const EMOJIS = ['😀','😂','😊','❤️','👍','🙏','🔥','✨','🎉','😢','😮','🤔','👏','💪','🥳','😎','🤩','😅','🫡','💯']
 
@@ -88,12 +94,19 @@ export default function TutorMessagesPage() {
     const load = async () => {
       setLoadingConvs(true)
       try {
-        const [convRes, reqRes] = await Promise.allSettled([
+        const [convRes, reqRes, annRes] = await Promise.allSettled([
           getConversations(),
           getMatchRequests(),
+          getAnnouncements(),
         ])
 
-        // Normalize conversations — backend returns participantId, participantName, lastMessage, etc.
+        if (annRes.status === 'fulfilled') {
+          const annList = annRes.value?.data || annRes.value?.announcements || annRes.value || []
+          const list = Array.isArray(annList) ? annList : []
+          setAnnouncements(list)
+          setAnnUnread(list.length > 0 ? 1 : 0)
+        }
+
         const rawConvs = (convRes.status === 'fulfilled'
           ? (convRes.value?.data || convRes.value?.conversations || [])
           : []
@@ -106,7 +119,6 @@ export default function TutorMessagesPage() {
           unread_count:    c.unreadCount      ?? c.unread_count ?? 0,
         }))
 
-        // Deduplicate real convs by partner_id
         const seenIds = new Set()
         const deduped = rawConvs.filter(c => {
           const key = String(c.partner_id)
@@ -115,8 +127,6 @@ export default function TutorMessagesPage() {
           return true
         })
 
-        // Merge accepted matches who don't yet have a conversation
-        // getMatchRequests() returns formatMobileUser objects with top-level id and fullName
         const matched = reqRes.status === 'fulfilled'
           ? (reqRes.value?.data?.data || reqRes.value?.data || [])
           : []
@@ -139,9 +149,8 @@ export default function TutorMessagesPage() {
         const partnerId = params.get('partner')
         if (partnerId) {
           setActiveId(Number(partnerId))
-        } else if (deduped.length > 0) {
-          setActiveId(deduped[0].partner_id)
         }
+        // else stays on ANNOUNCEMENTS_ID (default)
       } catch {}
       finally { setLoadingConvs(false) }
     }
@@ -149,7 +158,7 @@ export default function TutorMessagesPage() {
   }, [location.search])
 
   useEffect(() => {
-    if (!activeId) return
+    if (!activeId || activeId === ANNOUNCEMENTS_ID) return
     prevCountRef.current = 0
 
     const fetchMsgs = async (initial = false) => {
@@ -176,7 +185,6 @@ export default function TutorMessagesPage() {
     return () => clearInterval(interval)
   }, [activeId])
 
-  // Scroll to bottom only when new messages arrive
   useEffect(() => {
     if (messages.length > prevCountRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -185,7 +193,7 @@ export default function TutorMessagesPage() {
   }, [messages])
 
   const handleSend = async () => {
-    if (!input.trim() || !activeId || sending) return
+    if (!input.trim() || !activeId || activeId === ANNOUNCEMENTS_ID || sending) return
     const text = input.trim(); setInput(''); setSending(true)
     const opt = { id: Date.now(), content: text, sender_id: me?.id, created_at: new Date().toISOString(), is_mine: true }
     setMessages(p => [...p, opt])
@@ -194,16 +202,16 @@ export default function TutorMessagesPage() {
     finally { setSending(false) }
   }
 
-  const totalUnread   = convs.reduce((s, c) => s + (c.unread_count || 0), 0)
-  const activeConv    = convs.find(c => (c.partner_id || c.id) === activeId)
-  const partnerName   = activeConv?.partner_name || activeConv?.name || 'User'
-  const partnerIdx    = convs.findIndex(c => (c.partner_id || c.id) === activeId)
-  const partnerColor  = getColor(partnerIdx >= 0 ? partnerIdx : 0)
+  const isAnnouncementsActive = activeId === ANNOUNCEMENTS_ID
+  const totalUnread    = convs.reduce((s, c) => s + (c.unread_count || 0), 0)
+  const activeConv     = convs.find(c => (c.partner_id || c.id) === activeId)
+  const partnerName    = isAnnouncementsActive ? 'Announcements' : (activeConv?.partner_name || activeConv?.name || 'User')
+  const partnerIdx     = convs.findIndex(c => (c.partner_id || c.id) === activeId)
+  const partnerColor   = isAnnouncementsActive ? '#7C3AED' : getColor(partnerIdx >= 0 ? partnerIdx : 0)
 
   const startCall = (mode) => {
-    if (!activeId) return
-    const url = buildMeetUrl(me?.id, activeId, mode)
-    window.open(url, '_blank', 'noopener,noreferrer')
+    if (!activeId || isAnnouncementsActive) return
+    window.open(buildMeetUrl(me?.id, activeId, mode), '_blank', 'noopener,noreferrer')
   }
 
   const filtered = convs.filter(c => {
@@ -225,6 +233,7 @@ export default function TutorMessagesPage() {
         .conv-row.active { background: #F3F0FF; }
         .t-tab { padding: 8px 4px; font-size: 13px; font-weight: 600; color: #9CA3AF; cursor: pointer; border: none; border-bottom: 2.5px solid transparent; background: none; font-family: 'DM Sans', sans-serif; transition: color .15s; }
         .t-tab.active { color: #7C3AED; border-bottom-color: #7C3AED; }
+        .msgs-area { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
         .msgs-area::-webkit-scrollbar { width: 3px; }
         .msgs-area::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 3px; }
         .q-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #F8F9FB; cursor: pointer; }
@@ -240,7 +249,7 @@ export default function TutorMessagesPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 0, height: 'calc(100vh - 160px)', minHeight: 560 }}>
-          {/* Left */}
+          {/* Left panel */}
           <div className="tm-left">
             <div style={{ padding: '14px 14px 10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8F9FB', border: '1px solid #E5E7EB', borderRadius: 10, padding: '8px 12px' }}>
@@ -256,7 +265,29 @@ export default function TutorMessagesPage() {
                 </button>
               ))}
             </div>
+
             <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+              {/* Pinned Announcements */}
+              <div
+                className={`conv-row${isAnnouncementsActive ? ' active' : ''}`}
+                onClick={() => { setActiveId(ANNOUNCEMENTS_ID); setAnnUnread(0) }}
+              >
+                <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#F3F0FF', border: '2px solid #DDD6FE', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Megaphone size={18} color="#7C3AED" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: '#1E1B4B' }}>Announcements</span>
+                    {annUnread > 0 && <span style={{ background: '#7C3AED', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{annUnread}</span>}
+                  </div>
+                  <span style={{ fontSize: 12, color: '#9CA3AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                    {announcements.length > 0 ? announcements[0]?.title || 'View announcements' : 'No announcements'}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ height: 1, background: '#F0F0F4', margin: '4px 14px' }} />
+
               {loadingConvs ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Loader2 size={22} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} /></div>
               ) : filtered.length === 0 ? (
@@ -285,10 +316,83 @@ export default function TutorMessagesPage() {
             </div>
           </div>
 
-          {/* Center */}
+          {/* Center panel */}
           <div className="tm-center">
             {!activeId ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14 }}>Select a conversation to start messaging</div>
+            ) : isAnnouncementsActive ? (
+              /* ── Announcements view ── */
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid #F0F0F4' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#F3F0FF', border: '2px solid #DDD6FE', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Megaphone size={19} color="#7C3AED" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B' }}>Announcements</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Official updates from StudyMatch — read only</div>
+                  </div>
+                </div>
+
+                <div className="msgs-area">
+                  {announcements.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 13, marginTop: 40 }}>
+                      <Megaphone size={28} color="#DDD6FE" style={{ display: 'block', margin: '0 auto 10px' }} />
+                      No announcements yet.
+                    </div>
+                  ) : [...announcements].reverse().map(ann => {
+                    const isLong     = (ann.content || '').length > 200
+                    const isExpanded = expandedAnn === ann.id
+                    const preview    = isLong && !isExpanded
+                      ? (ann.content || '').slice(0, 200) + '…'
+                      : (ann.content || '')
+                    const postedAt   = ann.published_at || ann.created_at
+                    return (
+                      <div key={ann.id} style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                        <div style={{
+                          maxWidth: '85%', background: '#F8F8FF',
+                          border: '1px solid #DDD6FE', borderRadius: '4px 16px 16px 16px',
+                          padding: '12px 16px', fontSize: 13.5, color: '#1E1B4B', lineHeight: 1.6,
+                          boxShadow: '0 1px 4px rgba(0,0,0,.04)',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                            <Megaphone size={13} color="#7C3AED" />
+                            <span style={{ fontWeight: 800, fontSize: 13.5, color: '#7C3AED' }}>{ann.title}</span>
+                            {ann.is_pinned && (
+                              <span style={{ fontSize: 10, fontWeight: 700, background: '#F59E0B22', color: '#F59E0B', border: '1px solid #F59E0B44', borderRadius: 20, padding: '1px 7px' }}>Pinned</span>
+                            )}
+                          </div>
+
+                          <div style={{ whiteSpace: 'pre-wrap', color: '#374151', lineHeight: 1.65 }}>{preview}</div>
+
+                          {isLong && (
+                            <button onClick={() => setExpandedAnn(isExpanded ? null : ann.id)}
+                              style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#7C3AED', fontWeight: 700, fontSize: 12.5, fontFamily: 'inherit', padding: 0 }}>
+                              {isExpanded ? <><ChevronUp size={13} /> Show less</> : <><ChevronDown size={13} /> View full announcement</>}
+                            </button>
+                          )}
+
+                          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#9CA3AF' }}>
+                            <span>StudyMatch</span>
+                            <span>·</span>
+                            <span>{postedAt ? new Date(postedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+                            <span style={{ marginLeft: 'auto', padding: '1px 8px', borderRadius: 20, background: '#F3F0FF', color: '#7C3AED', fontWeight: 700, fontSize: 10 }}>Read only</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div ref={bottomRef} />
+                </div>
+
+                <div style={{ padding: '12px 16px', borderTop: '1px solid #F0F0F4', background: '#FAFAFA' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: '#F3F0FF', border: '1px solid #DDD6FE', borderRadius: 10 }}>
+                    <Megaphone size={15} color="#7C3AED" />
+                    <span style={{ fontSize: 13, color: '#6B7280', fontStyle: 'italic' }}>
+                      Announcements are broadcast-only. You cannot reply to this channel.
+                    </span>
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid #F0F0F4' }}>
@@ -297,37 +401,41 @@ export default function TutorMessagesPage() {
                     <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B' }}>{partnerName}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      title="Video call"
-                      onClick={() => startCall('video')}
-                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
+                    <button type="button" title="Video call" onClick={() => startCall('video')}
+                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <Video size={15} color="#6B7280" />
                     </button>
-                    <button
-                      type="button"
-                      title="Audio call"
-                      onClick={() => startCall('audio')}
-                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
+                    <button type="button" title="Audio call" onClick={() => startCall('audio')}
+                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <Phone size={15} color="#6B7280" />
                     </button>
-                    <button
-                      type="button"
-                      title="More"
-                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
+                    <button type="button" title="More"
+                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <MoreVertical size={15} color="#6B7280" />
                     </button>
                   </div>
                 </div>
-                <div className="msgs-area" style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                <div className="msgs-area">
                   {loadingMsgs ? (
                     <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Loader2 size={22} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} /></div>
                   ) : messages.length === 0 ? (
                     <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 13, marginTop: 24 }}>No messages yet. Say hello! 👋</div>
                   ) : messages.map(m => {
+                    if (m.message_type === 'system') {
+                      const lines = (m.content || '').split('\n\n')
+                      const heading = lines[0] || ''
+                      const body    = lines.slice(1).join('\n\n')
+                      return (
+                        <div key={m.id} style={{ display: 'flex', justifyContent: 'center', margin: '6px 0' }}>
+                          <div style={{ maxWidth: '80%', background: '#F3F0FF', border: '1px solid #DDD6FE', borderRadius: 12, padding: '10px 16px', fontSize: 13, color: '#4B5563', textAlign: 'center' }}>
+                            <div style={{ fontWeight: 700, color: '#7C3AED', fontSize: 12, marginBottom: 4 }}>📋 {heading}</div>
+                            {body && <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{body}</div>}
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>Support response — read only</div>
+                          </div>
+                        </div>
+                      )
+                    }
                     const isMine = m.is_mine || String(m.sender_id ?? m.senderId) === String(me?.id)
                     return (
                       <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', gap: 4 }}>
@@ -350,6 +458,7 @@ export default function TutorMessagesPage() {
                   })}
                   <div ref={bottomRef} />
                 </div>
+
                 <div style={{ padding: '12px 16px', borderTop: '1px solid #F0F0F4', position: 'relative' }}>
                   <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8F9FB', border: '1px solid #E5E7EB', borderRadius: 12, padding: '10px 14px', marginBottom: 8 }}>
@@ -383,12 +492,12 @@ export default function TutorMessagesPage() {
             )}
           </div>
 
-          {/* Right */}
-          <div className="tm-right" style={{ paddingLeft: 20 }}>
+          {/* Right panel */}
+          <div className="tm-right">
             <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '18px 18px' }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 14 }}>Active Sessions</div>
               <div style={{ padding: '12px 0', textAlign: 'center' }}>
-                <Calendar size={24} color="#DDD6FE" style={{ margin: '0 auto 8px' }} />
+                <Calendar size={24} color="#DDD6FE" style={{ margin: '0 auto 8px', display: 'block' }} />
                 <div style={{ fontSize: 13, color: '#9CA3AF' }}>No active sessions</div>
               </div>
             </div>

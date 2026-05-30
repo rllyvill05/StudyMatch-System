@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\SystemConfiguration;
 use Illuminate\Http\Request;
 
@@ -28,6 +29,9 @@ class AdminSystemConfigController extends Controller
             SystemConfiguration::set($item['key'], $item['value']);
         }
 
+        $keys = collect($request->configs)->pluck('key')->implode(', ');
+        AuditLog::record('update', 'system', "Admin updated system configurations: {$keys}");
+
         return response()->json(['message' => 'Configuration saved.']);
     }
 
@@ -36,6 +40,8 @@ class AdminSystemConfigController extends Controller
         $request->validate(['value' => 'nullable|string']);
 
         SystemConfiguration::set($key, $request->value);
+
+        AuditLog::record('update', 'system', "Admin updated config '{$key}' to '{$request->value}'", ['key' => $key, 'value' => $request->value]);
 
         return response()->json(['message' => "Config '{$key}' updated."]);
     }

@@ -2,11 +2,15 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { getConversations, getConversation, sendMessage, sendFile } from '../../api/chat'
 import { getMatchRequests } from '../../api/matchRequests'
+import { getAnnouncements } from '../../api/announcements'
 import { getUser } from '../../store/authStore'
 import {
   Search, Send, Paperclip, Image, FileText,
   Smile, MoreVertical, Phone, Video, Loader2,
+  Megaphone, X, ChevronDown, ChevronUp,
 } from 'lucide-react'
+
+const ANNOUNCEMENTS_ID = '__announcements__'
 
 /* ─── helpers ─────────────────────────────────────────────── */
 
@@ -61,19 +65,24 @@ export default function StudentMessagesPage() {
   const [searchParams] = useSearchParams()
   const partnerFromUrl = searchParams.get('partner')
 
-  const [convs,       setConvs]       = useState([])
-  const [activeId,    setActiveId]    = useState(null)
-  const [messages,    setMessages]    = useState([])
-  const [input,       setInput]       = useState('')
-  const [search,      setSearch]      = useState('')
-  const [loadingConvs,setLoadingConvs]= useState(true)
-  const [loadingMsgs, setLoadingMsgs] = useState(false)
-  const [sending,     setSending]     = useState(false)
+  const [convs,        setConvs]        = useState([])
+  const [activeId,     setActiveId]     = useState(null)
+  const [messages,     setMessages]     = useState([])
+  const [input,        setInput]        = useState('')
+  const [search,       setSearch]       = useState('')
+  const [loadingConvs, setLoadingConvs] = useState(true)
+  const [loadingMsgs,  setLoadingMsgs]  = useState(false)
+  const [sending,      setSending]      = useState(false)
   const bottomRef    = useRef(null)
   const prevCountRef = useRef(0)
   const fileRef      = useRef(null)
-  const [showEmoji,   setShowEmoji]   = useState(false)
-  const [sendingFile, setSendingFile] = useState(false)
+  const [showEmoji,    setShowEmoji]    = useState(false)
+  const [sendingFile,  setSendingFile]  = useState(false)
+
+  // Announcements
+  const [announcements,  setAnnouncements]  = useState([])
+  const [expandedAnn,    setExpandedAnn]    = useState(null) // id of full-view announcement
+  const [annUnread,      setAnnUnread]      = useState(0)
 
   const EMOJIS = ['😀','😂','😊','❤️','👍','🙏','🔥','✨','🎉','😢','😮','🤔','👏','💪','🥳','😎','🤩','😅','🫡','💯']
 
@@ -91,15 +100,24 @@ export default function StudentMessagesPage() {
 
   const openFilePicker = (accept) => { if (fileRef.current) { fileRef.current.accept = accept; fileRef.current.click() } }
 
-  // Load conversations + merge accepted tutor match requests
+  // Load conversations + announcements + match requests
   useEffect(() => {
     const load = async () => {
       setLoadingConvs(true)
       try {
-        const [convRes, reqRes] = await Promise.allSettled([
+        const [convRes, reqRes, annRes] = await Promise.allSettled([
           getConversations(),
           getMatchRequests(),
+          getAnnouncements(),
         ])
+
+        // Store announcements
+        if (annRes.status === 'fulfilled') {
+          const annList = annRes.value?.data || annRes.value?.announcements || annRes.value || []
+          const list = Array.isArray(annList) ? annList : []
+          setAnnouncements(list)
+          setAnnUnread(list.length > 0 ? 1 : 0)
+        }
 
         // Normalize conversations — backend returns participantId, participantName, lastMessage, lastMessageTime, unreadCount
         const rawConvs = (convRes.status === 'fulfilled'
@@ -152,8 +170,9 @@ export default function StudentMessagesPage() {
             })
           }
           setActiveId(match?.partner_id ?? partnerFromUrl)
-        } else if (deduped.length > 0) {
-          setActiveId(deduped[0].partner_id)
+        } else {
+          // Default to Announcements channel
+          setActiveId(ANNOUNCEMENTS_ID)
         }
         setConvs(deduped)
       } catch {}
@@ -224,9 +243,10 @@ export default function StudentMessagesPage() {
     }
   }
 
-  const activeConv = convs.find(c => (c.partner_id || c.id) === activeId)
-  const partnerName = activeConv?.partner_name || activeConv?.name || 'User'
-  const partnerColor = getColor(activeId)
+  const isAnnouncementsActive = activeId === ANNOUNCEMENTS_ID
+  const activeConv   = convs.find(c => (c.partner_id || c.id) === activeId)
+  const partnerName  = isAnnouncementsActive ? 'Announcements' : (activeConv?.partner_name || activeConv?.name || 'User')
+  const partnerColor = isAnnouncementsActive ? '#7C3AED' : getColor(activeId)
 
   const startCall = (mode) => {
     if (!activeId) return
@@ -277,6 +297,34 @@ export default function StudentMessagesPage() {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+              {/* Pinned Announcements channel */}
+              <div
+                className={`conv-item${isAnnouncementsActive ? ' active' : ''}`}
+                onClick={() => { setActiveId(ANNOUNCEMENTS_ID); setAnnUnread(0) }}
+              >
+                <div style={{
+                  width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                  background: '#F3F0FF', border: '2px solid #DDD6FE',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Megaphone size={17} color="#7C3AED" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: '#1E1B4B' }}>Announcements</span>
+                    {annUnread > 0 && (
+                      <span style={{ background: '#7C3AED', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{annUnread}</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                    {announcements.length > 0 ? announcements[0]?.title || 'View announcements' : 'No announcements'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div style={{ height: 1, background: '#F0F0F4', margin: '4px 14px 4px' }} />
+
               {loadingConvs ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
                   <Loader2 size={22} color="#7C3AED" style={{ animation: 'spin 1s linear infinite' }} />
@@ -314,12 +362,104 @@ export default function StudentMessagesPage() {
             </div>
           </div>
 
-          {/* Center: chat */}
+          {/* Center: chat / announcements */}
           <div className="mp-center" style={{ borderRadius: '0 16px 16px 0', border: '1px solid #F0F0F4' }}>
             {!activeId ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14 }}>
                 Select a conversation to start messaging
               </div>
+            ) : isAnnouncementsActive ? (
+              /* ── Announcements view ── */
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid #F0F0F4' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#F3F0FF', border: '2px solid #DDD6FE', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Megaphone size={18} color="#7C3AED" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B' }}>Announcements</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Official updates from StudyMatch — read only</div>
+                  </div>
+                </div>
+
+                <div className="msgs-area">
+                  {announcements.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 13, marginTop: 40 }}>
+                      <Megaphone size={28} color="#DDD6FE" style={{ marginBottom: 10, display: 'block', margin: '0 auto 10px' }} />
+                      No announcements yet.
+                    </div>
+                  ) : [...announcements].reverse().map(ann => {
+                    const isLong    = (ann.content || '').length > 200
+                    const isExpanded = expandedAnn === ann.id
+                    const preview   = isLong && !isExpanded
+                      ? (ann.content || '').slice(0, 200) + '…'
+                      : (ann.content || '')
+                    const postedAt  = ann.published_at || ann.created_at
+                    return (
+                      <div key={ann.id} style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                        <div style={{
+                          maxWidth: '85%', background: '#F8F8FF',
+                          border: '1px solid #DDD6FE', borderRadius: '4px 16px 16px 16px',
+                          padding: '12px 16px', fontSize: 13.5, color: '#1E1B4B', lineHeight: 1.6,
+                          boxShadow: '0 1px 4px rgba(0,0,0,.04)',
+                        }}>
+                          {/* Header */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                            <Megaphone size={13} color="#7C3AED" />
+                            <span style={{ fontWeight: 800, fontSize: 13.5, color: '#7C3AED' }}>{ann.title}</span>
+                            {ann.is_pinned && (
+                              <span style={{ fontSize: 10, fontWeight: 700, background: '#F59E0B22', color: '#F59E0B', border: '1px solid #F59E0B44', borderRadius: 20, padding: '1px 7px' }}>
+                                Pinned
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Content */}
+                          <div style={{ whiteSpace: 'pre-wrap', color: '#374151', lineHeight: 1.65 }}>
+                            {preview}
+                          </div>
+
+                          {/* Expand / collapse for long announcements */}
+                          {isLong && (
+                            <button
+                              onClick={() => setExpandedAnn(isExpanded ? null : ann.id)}
+                              style={{
+                                marginTop: 8, display: 'flex', alignItems: 'center', gap: 4,
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: '#7C3AED', fontWeight: 700, fontSize: 12.5, fontFamily: 'inherit',
+                                padding: 0,
+                              }}>
+                              {isExpanded
+                                ? <><ChevronUp size={13} /> Show less</>
+                                : <><ChevronDown size={13} /> View full announcement</>}
+                            </button>
+                          )}
+
+                          {/* Footer */}
+                          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#9CA3AF' }}>
+                            <span>StudyMatch</span>
+                            <span>·</span>
+                            <span>{postedAt ? new Date(postedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+                            <span style={{ marginLeft: 'auto', padding: '1px 8px', borderRadius: 20, background: '#F3F0FF', color: '#7C3AED', fontWeight: 700, fontSize: 10 }}>
+                              Read only
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div ref={bottomRef} />
+                </div>
+
+                {/* Read-only footer */}
+                <div style={{ padding: '12px 16px', borderTop: '1px solid #F0F0F4', background: '#FAFAFA' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: '#F3F0FF', border: '1px solid #DDD6FE', borderRadius: 10 }}>
+                    <Megaphone size={15} color="#7C3AED" />
+                    <span style={{ fontSize: 13, color: '#6B7280', fontStyle: 'italic' }}>
+                      Announcements are broadcast-only. You cannot reply to this channel.
+                    </span>
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 {/* Chat header */}
@@ -329,27 +469,16 @@ export default function StudentMessagesPage() {
                     <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B' }}>{partnerName}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      title="Video call"
-                      onClick={() => startCall('video')}
-                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
+                    <button type="button" title="Video call" onClick={() => startCall('video')}
+                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <Video size={15} color="#6B7280" />
                     </button>
-                    <button
-                      type="button"
-                      title="Audio call"
-                      onClick={() => startCall('audio')}
-                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
+                    <button type="button" title="Audio call" onClick={() => startCall('audio')}
+                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <Phone size={15} color="#6B7280" />
                     </button>
-                    <button
-                      type="button"
-                      title="More"
-                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
+                    <button type="button" title="More"
+                      style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                       <MoreVertical size={15} color="#6B7280" />
                     </button>
                   </div>
@@ -366,6 +495,20 @@ export default function StudentMessagesPage() {
                       No messages yet. Say hello! 👋
                     </div>
                   ) : messages.map(m => {
+                    if (m.message_type === 'system') {
+                      const lines = (m.content || '').split('\n\n')
+                      const heading = lines[0] || ''
+                      const body    = lines.slice(1).join('\n\n')
+                      return (
+                        <div key={m.id} style={{ display: 'flex', justifyContent: 'center', margin: '6px 0' }}>
+                          <div style={{ maxWidth: '80%', background: '#F3F0FF', border: '1px solid #DDD6FE', borderRadius: 12, padding: '10px 16px', fontSize: 13, color: '#4B5563', textAlign: 'center' }}>
+                            <div style={{ fontWeight: 700, color: '#7C3AED', fontSize: 12, marginBottom: 4 }}>📋 {heading}</div>
+                            {body && <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{body}</div>}
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>Support response — read only</div>
+                          </div>
+                        </div>
+                      )
+                    }
                     const isMine = m.is_mine || String(m.sender_id ?? m.senderId) === String(me?.id)
                     return (
                       <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', gap: 4 }}>

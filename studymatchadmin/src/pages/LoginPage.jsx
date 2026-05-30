@@ -23,7 +23,7 @@ export default function LoginPage() {
       if (err.response?.status === 401) {
         setError('Invalid email or password.')
       } else if (err.response?.status === 403) {
-        setError('Access denied. Admin privileges required.')
+        setError('Access denied. Super admin credentials required.')
       } else {
         setError('Something went wrong. Please try again.')
       }
@@ -42,14 +42,14 @@ export default function LoginPage() {
             <span className="text-white text-2xl font-bold">S</span>
           </div>
           <h1 className="text-white text-3xl font-bold">StudyMatch</h1>
-          <p className="text-slate-400 mt-2 text-sm">Admin Console — Desktop</p>
+          <p className="text-slate-400 mt-2 text-sm">Super Admin Console — Desktop</p>
         </div>
 
         {/* Card */}
         <div className="bg-slate-800 rounded-2xl p-8 shadow-xl border border-slate-700">
           <h2 className="text-white text-xl font-semibold mb-1">Sign in</h2>
           <p className="text-slate-400 text-sm mb-6">
-            Enter your admin credentials to continue
+            Super admin credentials only
           </p>
 
           {/* Error message */}
@@ -72,7 +72,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                placeholder="admin@studymatch.com"
+                placeholder="superadmin@studymatch.com"
                 className="w-full bg-slate-700 border border-slate-600 text-white placeholder-slate-400 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
             </div>

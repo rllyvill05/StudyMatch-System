@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_theme.dart';
 import '../../services/app_state.dart';
+import '../../services/api_service.dart';
 import 'edit_profile_screen.dart';
+import 'help_center_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -123,6 +125,13 @@ class SettingsScreen extends StatelessWidget {
                         subtitle: user?.email ?? '',
                         onTap: () => _showEmailInfo(context, user?.email),
                       ),
+                      _SettingsTile(
+                        icon: Icons.delete_outline_rounded,
+                        label: 'Delete Account',
+                        danger: true,
+                        onTap: () => _showDeleteAccountDialog(
+                            context, context.read<AppState>()),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -161,7 +170,8 @@ class SettingsScreen extends StatelessWidget {
                       _SettingsTile(
                         icon: Icons.help_outline_rounded,
                         label: 'Help & Support',
-                        onTap: () => _showHelpSheet(context),
+                        onTap: () => Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const HelpCenterScreen())),
                       ),
                       _SettingsTile(
                         icon: Icons.chat_bubble_outline_rounded,
@@ -345,15 +355,15 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  // ── Help & Support ────────────────────────────────────────────────────────
-  void _showHelpSheet(BuildContext context) {
+  // ── Delete Account ────────────────────────────────────────────────────────
+  void _showDeleteAccountDialog(BuildContext context, AppState state) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => const _HelpSheet(),
+      builder: (_) => _DeleteAccountSheet(appState: state),
     );
   }
 
@@ -530,30 +540,34 @@ class _SettingsTile extends StatelessWidget {
   final String label;
   final String? subtitle;
   final VoidCallback onTap;
+  final bool danger;
 
   const _SettingsTile({
     required this.icon,
     required this.label,
     this.subtitle,
     required this.onTap,
+    this.danger = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = danger ? AppTheme.error : AppTheme.primary;
+    final textColor = danger ? AppTheme.error : AppTheme.textDark;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: AppTheme.primary.withValues(alpha: 0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: AppTheme.primary, size: 20),
+        child: Icon(icon, color: color, size: 20),
       ),
       title: Text(label,
-          style: const TextStyle(
-              color: AppTheme.textDark,
+          style: TextStyle(
+              color: textColor,
               fontFamily: 'Poppins',
               fontSize: 14,
               fontWeight: FontWeight.w500)),
@@ -564,8 +578,8 @@ class _SettingsTile extends StatelessWidget {
                   fontFamily: 'Poppins',
                   fontSize: 12))
           : null,
-      trailing: const Icon(Icons.chevron_right_rounded,
-          color: AppTheme.textMuted, size: 20),
+      trailing: Icon(Icons.chevron_right_rounded,
+          color: danger ? AppTheme.error.withValues(alpha: 0.5) : AppTheme.textMuted, size: 20),
       onTap: onTap,
     );
   }
@@ -946,11 +960,24 @@ class _PrivacySheet extends StatelessWidget {
 }
 
 // ── Appearance ────────────────────────────────────────────────────────────────
-class _AppearanceSheet extends StatelessWidget {
+class _AppearanceSheet extends StatefulWidget {
   const _AppearanceSheet();
 
   @override
+  State<_AppearanceSheet> createState() => _AppearanceSheetState();
+}
+
+class _AppearanceSheetState extends State<_AppearanceSheet> {
+  static const _options = [
+    (ThemeMode.light,  Icons.wb_sunny_outlined,      'Light Mode',     'Classic bright interface'),
+    (ThemeMode.dark,   Icons.dark_mode_outlined,      'Dark Mode',      'Easy on the eyes at night'),
+    (ThemeMode.system, Icons.phone_android_outlined,  'System Default', 'Follows your device setting'),
+  ];
+
+  @override
   Widget build(BuildContext context) {
+    final currentMode = context.watch<AppState>().themeMode;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
@@ -961,57 +988,25 @@ class _AppearanceSheet extends StatelessWidget {
           const SizedBox(height: 8),
           const Text('Appearance',
               style: TextStyle(
-                  color: Color(0xFF1A1A2E),
+                  color: AppTheme.textDark,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Poppins')),
+          const SizedBox(height: 4),
+          const Text('Choose how StudyMatch looks on your device.',
+              style: TextStyle(
+                  color: AppTheme.textMuted, fontFamily: 'Poppins', fontSize: 13)),
           const SizedBox(height: 20),
-          _AppearanceOption(
-              icon: Icons.wb_sunny_outlined,
-              label: 'Light Mode',
-              subtitle: 'Currently active',
-              selected: true,
-              onTap: () {}),
-          const SizedBox(height: 10),
-          _AppearanceOption(
-              icon: Icons.dark_mode_outlined,
-              label: 'Dark Mode',
-              subtitle: 'Coming soon',
-              selected: false,
-              onTap: () {}),
-          const SizedBox(height: 10),
-          _AppearanceOption(
-              icon: Icons.phone_android_outlined,
-              label: 'System Default',
-              subtitle: 'Coming soon',
-              selected: false,
-              onTap: () {}),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10),
-              border:
-                  Border.all(color: AppTheme.primary.withValues(alpha: 0.15)),
+          for (final opt in _options) ...[
+            _AppearanceOption(
+              icon: opt.$2,
+              label: opt.$3,
+              subtitle: opt.$4,
+              selected: currentMode == opt.$1,
+              onTap: () => context.read<AppState>().setThemeMode(opt.$1),
             ),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline, color: AppTheme.primary, size: 16),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Dark Mode and System Default will be available in a future update.',
-                    style: TextStyle(
-                        color: AppTheme.primary,
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        height: 1.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
+            const SizedBox(height: 10),
+          ],
         ],
       ),
     );
@@ -1083,168 +1078,6 @@ class _AppearanceOption extends StatelessWidget {
   }
 }
 
-// ── Help & Support ────────────────────────────────────────────────────────────
-class _HelpSheet extends StatelessWidget {
-  const _HelpSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    const faqs = [
-      (
-        'How does matching work?',
-        'StudyMatch pairs students with tutors whose strong subjects overlap with your weak subjects — and vice versa.'
-      ),
-      (
-        'Can I change my role?',
-        'Yes. Go to Edit Profile and update your role. Your match deck will refresh to reflect the change.'
-      ),
-      (
-        'How do I start a session?',
-        'Once you are matched, open the chat with your match and agree on a time. Sessions can be scheduled from the Sessions tab.'
-      ),
-      (
-        'Why am I not seeing any matches?',
-        'Make sure your profile is complete with subjects, strengths, and weaknesses. Matches are based on academic compatibility.'
-      ),
-      (
-        'How do I report a user?',
-        'Open the user\'s profile and tap the three-dot menu in the top-right corner. Select "Report User" and follow the prompts.'
-      ),
-    ];
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      maxChildSize: 0.92,
-      minChildSize: 0.4,
-      expand: false,
-      builder: (_, ctrl) => SingleChildScrollView(
-        controller: ctrl,
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sheetHandle(),
-            const SizedBox(height: 8),
-            const Text('Help & Support',
-                style: TextStyle(
-                    color: Color(0xFF1A1A2E),
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Poppins')),
-            const SizedBox(height: 4),
-            const Text('Frequently asked questions.',
-                style: TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontFamily: 'Poppins',
-                    fontSize: 13)),
-            const SizedBox(height: 20),
-            for (final faq in faqs) _FaqItem(q: faq.$1, a: faq.$2),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F8FA),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE8E8EF)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.email_outlined, color: AppTheme.primary, size: 20),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Still need help?',
-                            style: TextStyle(
-                                color: Color(0xFF1A1A2E),
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14)),
-                        Text('Contact us at support@studymatch.app',
-                            style: TextStyle(
-                                color: AppTheme.primaryLight,
-                                fontFamily: 'Poppins',
-                                fontSize: 13)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FaqItem extends StatefulWidget {
-  final String q;
-  final String a;
-  const _FaqItem({required this.q, required this.a});
-  @override
-  State<_FaqItem> createState() => _FaqItemState();
-}
-
-class _FaqItemState extends State<_FaqItem> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => setState(() => _expanded = !_expanded),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: _expanded
-              ? AppTheme.primary.withValues(alpha: 0.04)
-              : const Color(0xFFF8F8FA),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: _expanded ? AppTheme.primary : const Color(0xFFE8E8EF)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(widget.q,
-                      style: TextStyle(
-                          color: _expanded
-                              ? AppTheme.primary
-                              : const Color(0xFF1A1A2E),
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13)),
-                ),
-                Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color:
-                        _expanded ? AppTheme.primary : const Color(0xFF9CA3AF),
-                    size: 20),
-              ],
-            ),
-            if (_expanded) ...[
-              const SizedBox(height: 10),
-              Text(widget.a,
-                  style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      height: 1.5)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Feedback ──────────────────────────────────────────────────────────────────
 class _FeedbackSheet extends StatefulWidget {
   const _FeedbackSheet();
@@ -1256,6 +1089,7 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
   final _ctrl = TextEditingController();
   String _category = 'General';
   bool _sent = false;
+  bool _sending = false;
 
   static const _categories = [
     'General',
@@ -1426,9 +1260,20 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _ctrl.text.trim().isEmpty
+                onPressed: (_ctrl.text.trim().isEmpty || _sending)
                     ? null
-                    : () => setState(() => _sent = true),
+                    : () async {
+                        setState(() => _sending = true);
+                        final res = await ApiService.submitFeedback(
+                          category: _category,
+                          message: _ctrl.text.trim(),
+                        );
+                        if (!mounted) return;
+                        setState(() {
+                          _sending = false;
+                          _sent = res['success'] == true;
+                        });
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
                   disabledBackgroundColor:
@@ -1485,3 +1330,162 @@ Widget _errorBanner(String message) => Container(
         ],
       ),
     );
+
+// ── Delete Account Sheet ──────────────────────────────────────────────────────
+class _DeleteAccountSheet extends StatefulWidget {
+  final AppState appState;
+  const _DeleteAccountSheet({required this.appState});
+
+  @override
+  State<_DeleteAccountSheet> createState() => _DeleteAccountSheetState();
+}
+
+class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
+  final _pwCtrl   = TextEditingController();
+  bool _obscure   = true;
+  bool _deleting  = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _pwCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _delete() async {
+    final pw = _pwCtrl.text.trim();
+    if (pw.isEmpty) {
+      setState(() => _error = 'Please enter your password.');
+      return;
+    }
+    setState(() { _deleting = true; _error = null; });
+    final res = await ApiService.deleteAccount(pw);
+    if (!mounted) return;
+    if (res['success'] == true) {
+      Navigator.of(context).pop();
+      widget.appState.signOut();
+    } else {
+      setState(() {
+        _error = res['message'] as String? ?? 'Incorrect password.';
+        _deleting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sheetHandle(),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.delete_outline_rounded, color: AppTheme.error, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text('Delete Account',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,
+                        color: AppTheme.textDark, fontFamily: 'Poppins')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.error.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.error.withValues(alpha: 0.2)),
+            ),
+            child: const Text(
+              'This action is permanent and cannot be undone. All your data including sessions, messages, and matches will be deleted.',
+              style: TextStyle(fontSize: 13, color: AppTheme.error,
+                  fontFamily: 'Poppins', height: 1.5),
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (_error != null) ...[
+            _errorBanner(_error!),
+            const SizedBox(height: 12),
+          ],
+          const Text('Confirm your password',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
+                  color: Color(0xFF374151), fontFamily: 'Poppins')),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _pwCtrl,
+            obscureText: _obscure,
+            style: const TextStyle(color: AppTheme.textDark, fontFamily: 'Poppins'),
+            decoration: InputDecoration(
+              hintText: 'Enter your password',
+              hintStyle: const TextStyle(color: AppTheme.textMuted, fontFamily: 'Poppins'),
+              filled: true, fillColor: const Color(0xFFF5F5F8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              suffixIcon: IconButton(
+                icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
+                    color: AppTheme.textMuted, size: 20),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFE8E8EF))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFE8E8EF))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppTheme.error, width: 1.5)),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.borderLight),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Cancel',
+                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600,
+                          color: AppTheme.textBody)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _deleting ? null : _delete,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.error,
+                    disabledBackgroundColor: AppTheme.error.withValues(alpha: 0.5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _deleting
+                      ? const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Delete Account',
+                          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600,
+                              color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

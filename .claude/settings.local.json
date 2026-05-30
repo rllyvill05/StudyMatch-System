@@ -57,7 +57,14 @@
       "Bash(Get-Content \"c:\\\\Project\\\\StudyMatch-System\\\\studymatch-api\\\\storage\\\\logs\\\\laravel.log\" -Tail 60)",
       "Bash(Get-ChildItem -Path \"C:\\\\Project\\\\StudyMatch-System\\\\studymatchadmin\\\\src\" -Recurse -Name)",
       "Bash(Get-ChildItem -Path \"C:\\\\Project\\\\StudyMatch-System\\\\studymatchadmin\\\\src\\\\pages\" -Name)",
-      "Bash(Get-ChildItem -Recurse -Path \"c:\\\\Project\\\\StudyMatch-System\\\\studymatch-web\\\\src\\\\\" -Directory | Select-Object -ExpandProperty FullName | Sort-Object)"
+      "Bash(Get-ChildItem -Recurse -Path \"c:\\\\Project\\\\StudyMatch-System\\\\studymatch-web\\\\src\\\\\" -Directory | Select-Object -ExpandProperty FullName | Sort-Object)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(npm install *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -H \"Authorization: Bearer 41|bPz7SqumN0OfVyR2A9WGv8E4Bcx3G7T3bKWKbyEIb60850f3\" -H \"Accept: application/json\" http://127.0.0.1:8000/api/admin/match-requests)",
+      "Bash(python -c ' *)",
+      "Bash(python3 -c ' *)",
+      "Bash(Get-Content storage/logs/laravel.log -Tail 60)",
+      "Bash(grep -n 'foreach.*$requests' studymatch-api/app/Http/Controllers/TutorRequestController.php)"
     ]
   }
 }

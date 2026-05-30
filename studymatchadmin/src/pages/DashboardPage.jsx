@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
+import { Users, CalendarClock, ShieldCheck, Flag } from 'lucide-react'
 import {
   getOverview,
   getSessionTrends,
@@ -8,12 +9,15 @@ import {
   getSubjectDemand,
 } from '../api/dashboard'
 
-const StatCard = ({ label, value, color }) => (
-  <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-    <p className="text-sm text-gray-500 font-medium mb-1">{label}</p>
-    <p className={`text-3xl font-bold ${color}`}>
-      {value ?? <span className="text-gray-300 text-2xl">—</span>}
-    </p>
+const StatCard = ({ label, value, iconColor, icon: Icon }) => (
+  <div style={{ background: '#fff', borderRadius: 20, padding: 22, border: '1px solid #E5E7EB' }}>
+    <div style={{ width: 50, height: 50, borderRadius: 14, background: iconColor + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+      <Icon size={22} color={iconColor} />
+    </div>
+    <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 6, fontFamily: "'DM Sans', sans-serif" }}>{label}</div>
+    <div style={{ fontSize: 30, fontWeight: 700, color: '#111827', fontFamily: "'DM Sans', sans-serif" }}>
+      {value ?? <span style={{ color: '#D1D5DB', fontSize: 22 }}>—</span>}
+    </div>
   </div>
 )
 
@@ -46,21 +50,21 @@ export default function DashboardPage() {
     }
 
     const fetchCharts = async () => {
-  try {
-    const [st, ug, sd] = await Promise.all([
-      getSessionTrends(7),
-      getUserGrowth(7),
-      getSubjectDemand(),
-    ])
-    setSessionTrends(Array.isArray(st.data) ? st.data : [])
-    setUserGrowth(Array.isArray(ug.data) ? ug.data : [])
-    setSubjectDemand(Array.isArray(sd.data) ? sd.data : [])
-  } catch {
-    // charts are non-critical — page still loads without them
-  } finally {
-    setChartsLoading(false)
-  }
-}
+      try {
+        const [st, ug, sd] = await Promise.all([
+          getSessionTrends(7),
+          getUserGrowth(7),
+          getSubjectDemand(),
+        ])
+        setSessionTrends(Array.isArray(st.data?.trends)   ? st.data.trends   : [])
+        setUserGrowth(Array.isArray(ug.data?.growth)       ? ug.data.growth   : [])
+        setSubjectDemand(Array.isArray(sd.data?.subjects)  ? sd.data.subjects : [])
+      } catch {
+        // charts are non-critical
+      } finally {
+        setChartsLoading(false)
+      }
+    }
 
     fetchStats()
     fetchCharts()
@@ -143,12 +147,12 @@ export default function DashboardPage() {
     },
     yAxis: {
       type: 'category',
-      data: subjectDemand.map(d => d.subject),
+      data: subjectDemand.map(d => d.name),
       axisLabel: { fontSize: 10, color: '#475569' },
       axisLine: { lineStyle: { color: '#e2e8f0' } },
     },
     series: [{
-      data: subjectDemand.map(d => d.total),
+      data: subjectDemand.map(d => d.student_demand),
       type: 'bar',
       barMaxWidth: 20,
       itemStyle: {
@@ -189,18 +193,18 @@ export default function DashboardPage() {
 
       {/* Primary KPI row */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Total Users"      value={stats?.total_users}     color="text-indigo-600" />
-        <StatCard label="Total Sessions"   value={stats?.total_sessions}  color="text-indigo-600" />
-        <StatCard label="Active Sessions"  value={stats?.active_sessions} color="text-emerald-600" />
-        <StatCard label="New Users Today"  value={stats?.new_users_today} color="text-indigo-600" />
+        <StatCard label="Total Users"             value={stats?.users?.total}                  iconColor="#7C3AED" icon={Users}        />
+        <StatCard label="Total Sessions"          value={stats?.sessions?.total}               iconColor="#6366f1" icon={CalendarClock} />
+        <StatCard label="Active Sessions"         value={stats?.sessions?.active}              iconColor="#22C55E" icon={CalendarClock} />
+        <StatCard label="Pending Verifications"   value={stats?.users?.pending_tutor_approval} iconColor="#F59E0B" icon={ShieldCheck}   />
       </div>
 
       {/* Secondary KPI row */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Sessions Today"  value={stats?.sessions_today}   color="text-indigo-600" />
-        <StatCard label="Unread Feedback" value={stats?.unread_feedback}  color="text-amber-600"  />
-        <StatCard label="Open Complaints" value={stats?.open_complaints}  color="text-red-600"    />
-        <StatCard label="Open Tickets"    value={stats?.open_help_tickets} color="text-orange-600" />
+        <StatCard label="Completed Sessions" value={stats?.sessions?.completed}       iconColor="#6366f1" icon={CalendarClock} />
+        <StatCard label="Total Tutors"       value={stats?.users?.tutors}             iconColor="#22C55E" icon={Users}         />
+        <StatCard label="Open Complaints"    value={stats?.support?.open_complaints}  iconColor="#EF4444" icon={Flag}          />
+        <StatCard label="Open Tickets"       value={stats?.support?.open_tickets}     iconColor="#F97316" icon={Flag}          />
       </div>
 
       {/* Charts row */}
@@ -294,19 +298,19 @@ export default function DashboardPage() {
         <div className="grid grid-cols-3 gap-4">
           <AlertCard
             label="Open Complaints"
-            value={stats?.open_complaints}
+            value={stats?.support?.open_complaints}
             color="text-red-600"
             bg="bg-red-50 border-red-100"
           />
           <AlertCard
             label="Open Help Tickets"
-            value={stats?.open_help_tickets}
+            value={stats?.support?.open_tickets}
             color="text-orange-600"
             bg="bg-orange-50 border-orange-100"
           />
           <AlertCard
-            label="Unread Feedback"
-            value={stats?.unread_feedback}
+            label="Pending Match Requests"
+            value={stats?.requests?.pending}
             color="text-amber-600"
             bg="bg-amber-50 border-amber-100"
           />

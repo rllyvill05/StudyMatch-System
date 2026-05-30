@@ -22,12 +22,12 @@ class AuditLog extends Model
         return $this->belongsTo(User::class, 'admin_id');
     }
 
-    public static function record(string $action, string $module, string $description = '', array $metadata = []): void
+    public static function record(string $action, string $module, string $description = '', array $metadata = [], ?int $adminId = null): void
     {
         static::create([
-            'admin_id'    => auth()->user()?->id,
+            'admin_id'    => $adminId ?? auth()->user()?->id,
             'action'      => $action,
-            'module'      => $module,
+            'module'      => strtolower($module),
             'description' => $description,
             'ip_address'  => request()->ip(),
             'metadata'    => $metadata ?: null,

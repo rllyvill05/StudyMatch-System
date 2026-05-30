@@ -38,7 +38,7 @@ export default function SystemConfigPage() {
     setError('')
     try {
       const res = await api.get('/admin/system-config')
-      setConfigs(res.data)
+      setConfigs(res.data.configs ?? {})
     } catch {
       setError('Failed to load system configuration.')
     } finally {

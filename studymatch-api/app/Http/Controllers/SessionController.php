@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Notification;
 use App\Models\Session;
-use App\Models\TutorRequest;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -67,7 +67,7 @@ class SessionController extends Controller
         return response()->json(['success' => true, 'data' => $data]);
     }
 
-    public function show(Request $request, $id)
+    public function show(Request $request, int $id)
     {
         $session = Session::with(['tutor.user', 'student.user', 'subject', 'tutorRequest'])->findOrFail($id);
         $this->authorizeSession($request->user(), $session);
@@ -141,10 +141,41 @@ class SessionController extends Controller
             'status'           => 'pending',
         ]);
 
-        return response()->json(['message' => 'Session booked.', 'session' => $session->load(['tutor.user', 'subject'])], 201);
+        $session->load(['tutor.user', 'student.user', 'subject']);
+        $date        = $session->scheduled_at
+            ? \Carbon\Carbon::parse($session->scheduled_at)->format('M j, g:i A')
+            : 'upcoming';
+        $subjectName = $session->subject?->name ?? 'a subject';
+
+        // Notify the other party about the new booking
+        if ($currentUser->student) {
+            // Student booked → notify tutor
+            $tutorUser = $session->tutor?->user;
+            if ($tutorUser) {
+                Notification::send(
+                    $tutorUser->id, 'session',
+                    'New session request',
+                    "{$currentUser->name} booked a session for {$subjectName} on {$date}.",
+                    ['session_id' => $session->id]
+                );
+            }
+        } else {
+            // Tutor booked → notify student
+            $studentUser = $session->student?->user;
+            if ($studentUser) {
+                Notification::send(
+                    $studentUser->id, 'session',
+                    'Session scheduled',
+                    "{$currentUser->name} scheduled a {$subjectName} session on {$date}.",
+                    ['session_id' => $session->id]
+                );
+            }
+        }
+
+        return response()->json(['message' => 'Session booked.', 'session' => $session], 201);
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id)
     {
         $session = Session::findOrFail($id);
         $this->authorizeSession($request->user(), $session);
@@ -169,7 +200,7 @@ class SessionController extends Controller
         return response()->json(['message' => 'Session updated.', 'session' => $session->fresh()]);
     }
 
-    public function confirm(Request $request, $id)
+    public function confirm(Request $request, int $id)
     {
         $session = Session::findOrFail($id);
         $tutor   = $request->user()->tutor;
@@ -183,21 +214,63 @@ class SessionController extends Controller
         }
 
         $session->update(['status' => 'scheduled']);
+        $session->load(['tutor.user', 'student.user']);
+
+        // Notify student their session is confirmed
+        $studentUser = $session->student?->user;
+        $tutorName   = $session->tutor?->user?->name ?? 'Your tutor';
+        $date        = $session->scheduled_at
+            ? \Carbon\Carbon::parse($session->scheduled_at)->format('M j, g:i A')
+            : 'the scheduled time';
+        if ($studentUser) {
+            Notification::send(
+                $studentUser->id, 'session',
+                'Session confirmed',
+                "{$tutorName} confirmed your session on {$date}.",
+                ['session_id' => $session->id]
+            );
+        }
 
         return response()->json(['success' => true, 'message' => 'Session confirmed.']);
     }
 
-    public function cancel(Request $request, $id)
+    public function cancel(Request $request, int $id)
     {
         $session = Session::findOrFail($id);
         $this->authorizeSession($request->user(), $session);
 
         $session->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+        $session->load(['tutor.user', 'student.user']);
+
+        // Notify the other party of the cancellation
+        $canceller    = $request->user();
+        $tutorUser    = $session->tutor?->user;
+        $studentUser  = $session->student?->user;
+        $cancellerName = $canceller->name;
+        $date          = $session->scheduled_at
+            ? \Carbon\Carbon::parse($session->scheduled_at)->format('M j, g:i A')
+            : 'the scheduled time';
+
+        if ($canceller->student && $tutorUser) {
+            Notification::send(
+                $tutorUser->id, 'session',
+                'Session cancelled',
+                "{$cancellerName} cancelled the session scheduled for {$date}.",
+                ['session_id' => $session->id]
+            );
+        } elseif ($canceller->tutor && $studentUser) {
+            Notification::send(
+                $studentUser->id, 'session',
+                'Session cancelled',
+                "{$cancellerName} cancelled the session scheduled for {$date}.",
+                ['session_id' => $session->id]
+            );
+        }
 
         return response()->json(['message' => 'Session cancelled.']);
     }
 
-    private function authorizeSession($user, Session $session): void
+    private function authorizeSession(\App\Models\User $user, Session $session): void
     {
         $isOwner = ($user->student && $session->student_id === $user->student->id)
                 || ($user->tutor   && $session->tutor_id   === $user->tutor->id)

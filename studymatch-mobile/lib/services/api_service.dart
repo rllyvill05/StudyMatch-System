@@ -548,6 +548,37 @@ class ApiService {
     }
   }
 
+  // ── Notifications ─────────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>> getNotifications({int page = 1}) async {
+    try {
+      final uri = Uri.parse('$_base/notifications').replace(
+        queryParameters: {'page': '$page'},
+      );
+      final res = await http.get(uri, headers: _jsonHeaders);
+      if (res.statusCode == 200) return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {}
+    return {'data': [], 'total': 0};
+  }
+
+  static Future<void> markNotificationRead(int id) async {
+    try {
+      await http.post(
+        Uri.parse('$_base/notifications/$id/read'),
+        headers: _jsonHeaders,
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> markAllNotificationsRead() async {
+    try {
+      await http.post(
+        Uri.parse('$_base/notifications/read-all'),
+        headers: _jsonHeaders,
+      );
+    } catch (_) {}
+  }
+
   // ── Resources ─────────────────────────────────────────────────────────────
   static Future<List<DBResource>> getResources({
     String? subject,
@@ -578,6 +609,248 @@ class ApiService {
       return [];
     }
   }
+
+  // ── Subjects ──────────────────────────────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getSubjects() async {
+    try {
+      final res = await http.get(Uri.parse('$_base/subjects'), headers: _jsonHeaders);
+      final data = jsonDecode(res.body);
+      final list = data is List ? data : (data['data'] as List? ?? []);
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getWeakSubjects() async {
+    try {
+      final res = await http.get(Uri.parse('$_base/weak-subjects'), headers: _jsonHeaders);
+      final data = jsonDecode(res.body);
+      final list = data is List ? data : (data['data'] as List? ?? []);
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> addWeakSubject({
+    required int subjectId,
+    String difficultyLevel = 'moderate',
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_base/weak-subjects'),
+        headers: _jsonHeaders,
+        body: jsonEncode({'subject_id': subjectId, 'difficulty_level': difficultyLevel}),
+      );
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> removeWeakSubject(int id) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$_base/weak-subjects/$id'),
+        headers: _jsonHeaders,
+      );
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  // ── Students (for tutor discovery) ───────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getStudents({String? search}) async {
+    final params = <String, String>{};
+    if (search != null && search.isNotEmpty) params['search'] = search;
+    try {
+      final uri = Uri.parse('$_base/students')
+          .replace(queryParameters: params.isEmpty ? null : params);
+      final res = await http.get(uri, headers: _jsonHeaders);
+      final data = jsonDecode(res.body);
+      final list = data is List ? data : (data['data'] as List? ?? []);
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── Complaints ────────────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>> submitComplaint({
+    required String subject,
+    required String description,
+    int? reportedUserId,
+    String priority = 'medium',
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_base/complaints'),
+        headers: _jsonHeaders,
+        body: jsonEncode({
+          'subject': subject,
+          'description': description,
+          if (reportedUserId != null) 'reported_user_id': reportedUserId,
+          'priority': priority,
+        }),
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      return res.statusCode == 201 ? {'success': true, ...body} : {'success': false, ...body};
+    } catch (_) {
+      return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getMyComplaints() async {
+    try {
+      final res = await http.get(Uri.parse('$_base/complaints'), headers: _jsonHeaders);
+      final data = jsonDecode(res.body);
+      final list = data is List ? data : (data['data'] as List? ?? []);
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── Feedback ──────────────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>> submitFeedback({
+    required String category,
+    required String message,
+    int? rating,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_base/feedback/submit'),
+        headers: _jsonHeaders,
+        body: jsonEncode({
+          'category': category,
+          'message': message,
+          if (rating != null) 'rating': rating,
+        }),
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      return res.statusCode == 201 || res.statusCode == 200
+          ? {'success': true, ...body}
+          : {'success': false, ...body};
+    } catch (_) {
+      return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getMyFeedback() async {
+    try {
+      final res = await http.get(Uri.parse('$_base/feedback/my-feedback'), headers: _jsonHeaders);
+      final data = jsonDecode(res.body);
+      final list = data is List ? data : (data['data'] as List? ?? []);
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── Help Center ───────────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>> submitHelpTicket({
+    required String subject,
+    required String message,
+    String? category,
+    String priority = 'medium',
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_base/help-center/submit'),
+        headers: _jsonHeaders,
+        body: jsonEncode({
+          'subject': subject,
+          'message': message,
+          if (category != null) 'category': category,
+          'priority': priority,
+        }),
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      return res.statusCode == 201 || res.statusCode == 200
+          ? {'success': true, ...body}
+          : {'success': false, ...body};
+    } catch (_) {
+      return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getMyTickets() async {
+    try {
+      final res = await http.get(Uri.parse('$_base/help-center'), headers: _jsonHeaders);
+      final data = jsonDecode(res.body);
+      final list = data is List ? data : (data['data'] as List? ?? []);
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── Delete Account ────────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>> deleteAccount(String password) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$_base/profile/delete-account'),
+        headers: _jsonHeaders,
+        body: jsonEncode({'password': password}),
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      return res.statusCode == 200 ? {'success': true, ...body} : {'success': false, ...body};
+    } catch (_) {
+      return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  // ── Session extras ────────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>> rescheduleSession({
+    required String sessionId,
+    required DateTime scheduledAt,
+    int? durationMinutes,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+        if (durationMinutes != null) 'duration_minutes': durationMinutes,
+      };
+      final res = await http.put(
+        Uri.parse('$_base/sessions/$sessionId'),
+        headers: _jsonHeaders,
+        body: jsonEncode(body),
+      );
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      return res.statusCode == 200 ? {'success': true, ...decoded} : {'success': false, ...decoded};
+    } catch (_) {
+      return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  // ── Resource extras ───────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>> deleteResource(int resourceId) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$_base/library/$resourceId'),
+        headers: _jsonHeaders,
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      return res.statusCode == 200 ? {'success': true, ...body} : {'success': false, ...body};
+    } catch (_) {
+      return {'success': false, 'message': 'Network error'};
+    }
+  }
+
+  static String resourceDownloadUrl(int resourceId) =>
+      '$_base/library/$resourceId/download';
+
+  static Map<String, String> get authHeaders => _jsonHeaders;
 
   static Future<Map<String, dynamic>> uploadResource({
     required String uploaderId,

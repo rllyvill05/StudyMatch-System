@@ -38,7 +38,19 @@ body {
   min-height: 100vh;
 }
 
-/* 6. Scrollbar */
+/* 6. Dark mode — filter-invert approach applied to the app shell.
+      Images/SVGs get a counter-filter so they look natural. */
+html.dark #root {
+  filter: invert(1) hue-rotate(180deg);
+}
+html.dark img,
+html.dark video,
+html.dark iframe,
+html.dark canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* 7. Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
 }

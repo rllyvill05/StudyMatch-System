@@ -13,7 +13,7 @@ export const getMyComplaints = async () => {
 export const submitComplaint = async (reportedUserId, category, description) => {
   try {
     const response = await api.post('/complaints', {
-      reported_user_id: reportedUserId,
+      reported_user_id: reportedUserId || null,
       subject: category,
       description
     });

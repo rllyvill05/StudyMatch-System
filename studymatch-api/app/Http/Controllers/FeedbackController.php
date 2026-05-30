@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Feedback;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 
 class FeedbackController extends Controller
@@ -31,6 +32,15 @@ class FeedbackController extends Controller
             'rating'   => $request->rating,
             'status'   => 'unread',
         ]);
+
+        $user = $request->user();
+        $ratingStr = $feedback->rating ? " (rated {$feedback->rating}/5)" : '';
+        Notification::notifyAdmins(
+            'info',
+            'New Feedback Received',
+            "{$user->name} submitted {$feedback->category} feedback{$ratingStr}.",
+            ['feedback_id' => $feedback->id, 'category' => $feedback->category, 'rating' => $feedback->rating]
+        );
 
         return response()->json(['message' => 'Feedback submitted. Thank you!', 'feedback' => $feedback], 201);
     }

@@ -7,11 +7,10 @@ export const getPotentialPartners = async (filters = {}) => {
   try {
     const params = new URLSearchParams();
     
-    if (filters.department) params.append('department', filters.department);
+    if (filters.subject)    params.append('subject',     filters.subject);
+    if (filters.department) params.append('department',  filters.department);
     if (filters.studyStyle) params.append('study_style', filters.studyStyle);
-    if (filters.subjects && filters.subjects.length > 0) {
-      params.append('subjects', filters.subjects.join(','));
-    }
+    if (filters.search)     params.append('search',      filters.search);
     
     const queryString = params.toString();
     const url = queryString ? `/partners?${queryString}` : '/partners';

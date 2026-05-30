@@ -1,28 +1,32 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Bell, ChevronDown, Settings, LogOut, User } from 'lucide-react'
+import { Bell, ChevronDown, Settings, LogOut } from 'lucide-react'
 import { getUser } from '../../store/authStore'
-import NotificationDropdown from '../../pages/shared/NotificationDropDownPage'
-
-/* ─── mock notifications ─────────────────────────────────────── */
-const MOCK_NOTIFS = [
-  { id: 1, text: 'New tutor verification request',   time: '2m ago',  unread: true  },
-  { id: 2, text: '5 new reports submitted',          time: '1h ago',  unread: true  },
-  { id: 3, text: 'Platform maintenance scheduled',   time: '3h ago',  unread: true  },
-  { id: 4, text: 'New user registrations: 124 today',time: '5h ago',  unread: false },
-  { id: 5, text: 'Weekly report is ready',           time: '1d ago',  unread: false },
-]
+import api from '../../api/axiosInstance'
 
 export default function AdminNavbar() {
   const user        = getUser()
   const navigate    = useNavigate()
-  const [notifOpen, setNotifOpen]   = useState(false)
+  const [notifOpen,   setNotifOpen]   = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [notifs, setNotifs]         = useState(MOCK_NOTIFS)
+  const [notifs,      setNotifs]      = useState([])
   const notifRef   = useRef(null)
   const profileRef = useRef(null)
 
-  const unreadCount = notifs.filter(n => n.unread).length
+  const unreadCount = notifs.filter(n => !n.is_read).length
+
+  const fetchNotifs = async () => {
+    try {
+      const res = await api.get('/notifications', { params: { per_page: 10 } })
+      setNotifs(Array.isArray(res.data?.data) ? res.data.data : [])
+    } catch {}
+  }
+
+  useEffect(() => {
+    fetchNotifs()
+    const interval = setInterval(fetchNotifs, 60000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const handler = (e) => {
@@ -33,7 +37,20 @@ export default function AdminNavbar() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const markAllRead = () => setNotifs(p => p.map(n => ({ ...n, unread: false })))
+  const markAllRead = async () => {
+    try {
+      await api.put('/notifications/mark-all-read')
+      setNotifs(p => p.map(n => ({ ...n, is_read: true })))
+    } catch {}
+  }
+
+  const timeAgo = (d) => {
+    const s = (Date.now() - new Date(d)) / 1000
+    if (s < 60)    return 'just now'
+    if (s < 3600)  return `${Math.floor(s/60)}m ago`
+    if (s < 86400) return `${Math.floor(s/3600)}h ago`
+    return `${Math.floor(s/86400)}d ago`
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -147,16 +164,19 @@ export default function AdminNavbar() {
                 )}
               </div>
               <div style={{ maxHeight: 320, overflowY: 'auto' }}>
-                {notifs.map(n => (
-                  <div key={n.id} className={`an-notif-row${n.unread ? ' unread' : ''}`}>
+                {notifs.length === 0 ? (
+                  <div style={{ padding: '20px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>No notifications</div>
+                ) : notifs.map(n => (
+                  <div key={n.id} className={`an-notif-row${!n.is_read ? ' unread' : ''}`}>
                     <div style={{
                       width: 8, height: 8, borderRadius: '50%',
-                      background: n.unread ? '#7C3AED' : 'transparent',
+                      background: !n.is_read ? '#7C3AED' : 'transparent',
                       flexShrink: 0, marginTop: 5,
                     }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: n.unread ? 700 : 500, color: '#1E1B4B', lineHeight: 1.4 }}>{n.text}</div>
-                      <div style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 3 }}>{n.time}</div>
+                      <div style={{ fontSize: 13, fontWeight: !n.is_read ? 700 : 500, color: '#1E1B4B', lineHeight: 1.4 }}>{n.title}</div>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{n.message}</div>
+                      <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>{timeAgo(n.created_at)}</div>
                     </div>
                   </div>
                 ))}
@@ -177,7 +197,7 @@ export default function AdminNavbar() {
               <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1E1B4B', lineHeight: 1.2 }}>
                 {user?.name || 'Admin'}
               </div>
-              <div style={{ fontSize: 11.5, color: '#9CA3AF' }}>Super Administrator</div>
+              <div style={{ fontSize: 11.5, color: '#9CA3AF' }}>{user?.role === 'super_admin' ? 'Super Admin' : 'Administrator'}</div>
             </div>
             <div style={{
               width: 38, height: 38, borderRadius: '50%',

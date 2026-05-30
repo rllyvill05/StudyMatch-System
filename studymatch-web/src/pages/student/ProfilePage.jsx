@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { getProfile, updateProfile, updateProfileStep3 } from '../../api/profile'
+import { useState, useEffect, useRef } from 'react'
+import { getProfile, updateProfile, updateProfileStep3, uploadAvatar } from '../../api/profile'
 import { getSubjects } from '../../api/subjects'
 import { getUser, saveAuth, getToken } from '../../store/authStore'
 import {
@@ -37,13 +37,16 @@ function Avatar({ name = '', size = 90 }) {
 const TABS = ['Profile', 'Edit Profile', 'Preferences']
 
 export default function StudentProfilePage() {
-  const authUser = getUser()
-  const [profile,   setProfile]   = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [saving,    setSaving]    = useState(false)
-  const [error,     setError]     = useState('')
-  const [success,   setSuccess]   = useState('')
-  const [activeTab, setActiveTab] = useState('Profile')
+  const authUser  = getUser()
+  const avatarRef = useRef(null)
+  const [profile,         setProfile]         = useState(null)
+  const [loading,         setLoading]         = useState(true)
+  const [saving,          setSaving]          = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarError,     setAvatarError]     = useState(false)
+  const [error,           setError]           = useState('')
+  const [success,         setSuccess]         = useState('')
+  const [activeTab,       setActiveTab]       = useState('Profile')
 
   const [allSubjects, setAllSubjects] = useState([])
   const [form, setForm] = useState({
@@ -127,6 +130,24 @@ export default function StudentProfilePage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingAvatar(true)
+    try {
+      const res = await uploadAvatar(file)
+      const newAvatar = res?.avatar_url
+      if (newAvatar) {
+        setProfile(p => ({ ...p, avatar_url: newAvatar }))
+        setAvatarError(false)
+        saveAuth(getToken(), { ...authUser, avatar: newAvatar })
+      }
+      setSuccess('Avatar updated!')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Failed to upload avatar.') }
+    finally { setUploadingAvatar(false) }
   }
 
   const toggleSubject = (subject) => {
@@ -252,14 +273,24 @@ export default function StudentProfilePage() {
               <div style={{ background: 'white', border: '1px solid #F0F0F4', borderRadius: 16, padding: '24px 28px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, marginBottom: 24 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <Avatar name={name} size={90} />
-                    <button onClick={() => setActiveTab('Edit Profile')} style={{
+                    <input ref={avatarRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
+                    {profile?.avatar_url && !avatarError ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt={name}
+                        onError={() => setAvatarError(true)}
+                        style={{ width: 90, height: 90, borderRadius: '50%', objectFit: 'cover', border: '3px solid #DDD6FE' }}
+                      />
+                    ) : (
+                      <Avatar name={name} size={90} />
+                    )}
+                    <button onClick={() => avatarRef.current?.click()} disabled={uploadingAvatar} style={{
                       position: 'absolute', bottom: 2, right: 2,
                       width: 28, height: 28, borderRadius: '50%',
                       background: '#7C3AED', border: '2px solid white',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                     }}>
-                      <Camera size={13} color="white" />
+                      {uploadingAvatar ? <Loader2 size={12} color="white" style={{ animation: 'spin 1s linear infinite' }} /> : <Camera size={13} color="white" />}
                     </button>
                   </div>
                   <div style={{ flex: 1 }}>
@@ -297,12 +328,12 @@ export default function StudentProfilePage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 0, borderTop: '1px solid #F0F0F4', paddingTop: 20 }}>
                   {[
-                    { label: 'Overall Progress',  value: '—',                              color: '#7C3AED' },
-                    { label: 'Sessions Attended', value: profile?.sessions_count || 0,     color: '#10B981' },
-                    { label: 'Study Hours',        value: profile?.study_hours    || 0,    color: '#6366F1' },
+                    { label: 'Subjects Needed',  value: (profile?.student?.weak_subjects || profile?.student?.weakSubjects || []).length, color: '#7C3AED' },
+                    { label: 'Program',           value: program || '—',  color: '#10B981' },
+                    { label: 'Year Level',        value: year    || '—',  color: '#6366F1' },
                   ].map(({ label, value, color }, i) => (
                     <div key={label} style={{ textAlign: 'center', borderRight: i < 2 ? '1px solid #F0F0F4' : 'none', padding: '0 16px' }}>
-                      <div style={{ fontSize: 24, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
                       <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>{label}</div>
                     </div>
                   ))}

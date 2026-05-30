@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Notification;
 use App\Models\TutorRequest;
 use App\Models\User;
 use App\Traits\MobileUserFormatter;
@@ -50,7 +51,7 @@ class TutorRequestController extends Controller
                 ->latest()
                 ->get();
 
-            foreach ($requests as $req) {
+            foreach ($receivedRequests as $req) {
                 $student = \App\Models\Student::find($req->student_id);
                 if (!$student) continue;
                 $otherUser = User::with([
@@ -208,16 +209,45 @@ class TutorRequestController extends Controller
             }
             // Mutual like — upgrade to accepted
             $existing->update(['status' => 'accepted', 'accepted_at' => now()]);
+
+            // Notify both parties of the mutual match
+            $studentUser = \App\Models\Student::find($studentId)?->user;
+            $tutorUser   = \App\Models\Tutor::find($tutorId)?->user;
+            if ($studentUser && $tutorUser) {
+                Notification::send(
+                    $studentUser->id, 'match_request',
+                    "It's a match!",
+                    "You and {$tutorUser->name} are now matched. Start a session!",
+                    ['tutor_request_id' => $existing->id]
+                );
+                Notification::send(
+                    $tutorUser->id, 'match_request',
+                    "It's a match!",
+                    "You and {$studentUser->name} are now matched. Start a session!",
+                    ['tutor_request_id' => $existing->id]
+                );
+            }
+
             return response()->json(['success' => true, 'status' => 'accepted', 'message' => 'It\'s a match!']);
         }
 
-        TutorRequest::create([
+        $newRequest = TutorRequest::create([
             'student_id' => $studentId,
             'tutor_id'   => $tutorId,
             'subject_id' => $request->subject_id,
             'message'    => $request->message,
             'status'     => 'pending',
         ]);
+
+        // Notify the receiver of the new request
+        $senderName   = $currentUser->name;
+        $receiverUser = $receiverUser; // already resolved above
+        Notification::send(
+            $receiverUser->id, 'match_request',
+            'New match request',
+            "{$senderName} wants to study with you.",
+            ['tutor_request_id' => $newRequest->id]
+        );
 
         return response()->json(['success' => true, 'status' => 'pending', 'message' => 'Match request sent.'], 201);
     }
@@ -278,6 +308,18 @@ class TutorRequestController extends Controller
 
         $tutorRequest->update(['status' => 'accepted', 'accepted_at' => now()]);
 
+        // Notify the student their request was accepted
+        $tutorUser   = $tutorRequest->tutor?->user;
+        $studentUser = $tutorRequest->student?->user;
+        if ($studentUser && $tutorUser) {
+            Notification::send(
+                $studentUser->id, 'match_request',
+                'Match request accepted',
+                "{$tutorUser->name} accepted your match request. Start studying!",
+                ['tutor_request_id' => $tutorRequest->id]
+            );
+        }
+
         return response()->json(['message' => 'Request accepted.', 'request' => $tutorRequest]);
     }
 
@@ -315,6 +357,18 @@ class TutorRequestController extends Controller
         }
 
         $tutorRequest->update(['status' => 'declined', 'declined_at' => now()]);
+
+        // Notify the student their request was declined
+        $tutorUser   = $tutorRequest->tutor?->user;
+        $studentUser = $tutorRequest->student?->user;
+        if ($studentUser && $tutorUser) {
+            Notification::send(
+                $studentUser->id, 'match_request',
+                'Match request declined',
+                "{$tutorUser->name} was unable to accept your request at this time.",
+                ['tutor_request_id' => $tutorRequest->id]
+            );
+        }
 
         return response()->json(['message' => 'Request declined.', 'request' => $tutorRequest]);
     }

@@ -10,14 +10,18 @@ class AdminAuditLogController extends Controller
 {
     public function index(Request $request)
     {
-        $query = AuditLog::with('user');
+        $query = AuditLog::with('admin');
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+        if ($request->filled('module')) {
+            $query->whereRaw('LOWER(module) = ?', [strtolower($request->module)]);
         }
 
         if ($request->filled('action')) {
             $query->where('action', 'LIKE', "%{$request->action}%");
+        }
+
+        if ($request->filled('admin_id')) {
+            $query->where('admin_id', $request->admin_id);
         }
 
         if ($request->filled('from')) {
@@ -28,7 +32,7 @@ class AdminAuditLogController extends Controller
             $query->whereDate('created_at', '<=', $request->to);
         }
 
-        $logs = $query->latest()->paginate($request->get('per_page', 50));
+        $logs = $query->latest()->paginate((int) $request->input('per_page', 50));
 
         return response()->json($logs);
     }

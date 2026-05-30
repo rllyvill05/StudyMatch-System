@@ -8,6 +8,7 @@ import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import ResetPasswordPage  from './pages/auth/ResetPasswordPage'
 import VerifyEmailPage    from './pages/auth/VerifyEmailPage'
 import ProfileSetupPage   from './pages/auth/ProfileSetupPage'
+import TutorPendingPage   from './pages/auth/TutorPendingPage'
 
 // Layouts
 import StudentLayout from './components/layout/StudentLayout'
@@ -63,9 +64,12 @@ import UsersPage           from './pages/admin/UsersPage'
 function RootRedirect() {
   const user = getUser()
   if (!user) return <Navigate to="/login" replace />
-  if (user.role === 'student') return <Navigate to="/student/dashboard" replace />
-  if (user.role === 'tutor')   return <Navigate to="/tutor/dashboard"   replace />
-  if (user.role === 'admin')   return <Navigate to="/admin/dashboard"   replace />
+  if (user.role === 'student')    return <Navigate to="/student/dashboard" replace />
+  if (user.role === 'tutor') {
+    const approved = user?.tutor?.verification_status === 'approved'
+    return <Navigate to={approved ? '/tutor/dashboard' : '/tutor/pending'} replace />
+  }
+  if (user.role === 'admin' || user.role === 'super_admin') return <Navigate to="/admin/dashboard" replace />
   return <Navigate to="/login" replace />
 }
 
@@ -82,6 +86,8 @@ function TutorRoute({ children }) {
   const user = getUser()
   if (!user) return <Navigate to="/login" replace />
   if (user.role !== 'tutor') return <Navigate to="/" replace />
+  const verificationStatus = user?.tutor?.verification_status
+  if (verificationStatus !== 'approved') return <Navigate to="/tutor/pending" replace />
   return children
 }
 
@@ -99,6 +105,7 @@ const router = createBrowserRouter([
   { path: '/reset-password',  element: <ResetPasswordPage />  },
   { path: '/verify-email',    element: <VerifyEmailPage />    },
   { path: '/profile-setup',   element: <ProfileSetupPage />   },
+  { path: '/tutor/pending',   element: <TutorPendingPage />   },
 
   /* ── Student ── */
   {
@@ -179,7 +186,7 @@ const router = createBrowserRouter([
       { path: 'settings',      element: <AdminSettings />       },
       { path: 'tutors',        element: <TutorsPage />          },
       { path: 'users',         element: <UsersPage />           },
-      { path: '*',             element: <Navigate to="dashboard" replace /> },
+      { path: '*',             element: <Navigate to="/admin/dashboard" replace /> },
     ],
   },
 

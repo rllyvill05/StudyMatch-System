@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getRoles, assignRole, revokeRole } from '../api/roles'
-import { getUsers } from '../api/user'
+import { getUsers, createUser } from '../api/user'
 
 const RoleBadge = ({ name }) => {
   const styles = {
@@ -27,10 +27,20 @@ export default function RolesPage() {
   const [searching, setSearching]   = useState(false)
   const [assigning, setAssigning]   = useState(false)
 
+  // Create user modal
+  const [showCreate, setShowCreate] = useState(false)
+  const [creating,   setCreating]   = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [showPwd,    setShowPwd]    = useState(false)
+  const [newUser, setNewUser] = useState({
+    name: '', email: '', password: '', role: 'admin',
+  })
+
   const fetchRoles = async () => {
     try {
       const res = await getRoles()
-      setRoles(res.data)
+      const raw = Array.isArray(res.data?.roles) ? res.data.roles : []
+      setRoles(raw.map(name => ({ id: name, name, permissions: [] })))
     } catch {
       setError('Failed to load roles.')
     }
@@ -101,17 +111,49 @@ export default function RolesPage() {
     }
   }
 
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$'
+    return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  }
+
+  const handleCreate = async () => {
+    setCreateError('')
+    if (!newUser.name.trim())     return setCreateError('Name is required.')
+    if (!newUser.email.trim())    return setCreateError('Email is required.')
+    if (newUser.password.length < 8) return setCreateError('Password must be at least 8 characters.')
+    setCreating(true)
+    try {
+      await createUser(newUser)
+      setActionMsg(`User "${newUser.name}" (${newUser.role}) created successfully.`)
+      setShowCreate(false)
+      setNewUser({ name: '', email: '', password: '', role: 'admin' })
+      fetchAdmins()
+    } catch (err) {
+      setCreateError(err?.response?.data?.message || 'Failed to create user.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">
-          Role Management
-        </h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Manage admin roles and access control
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Role Management
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Manage admin roles and access control
+          </p>
+        </div>
+        <button
+          onClick={() => { setShowCreate(true); setCreateError('') }}
+          className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        >
+          + Create User
+        </button>
       </div>
 
       {/* Action message */}
@@ -244,9 +286,7 @@ export default function RolesPage() {
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex gap-1">
-                        {user.roles?.map(r => (
-                          <RoleBadge key={r.name ?? r} name={r.name ?? r} />
-                        ))}
+                        {user.role && <RoleBadge name={user.role} />}
                       </div>
                       <button
                         onClick={() => setSelectedUser(
@@ -340,9 +380,7 @@ export default function RolesPage() {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex gap-1 flex-wrap">
-                          {user.roles?.map(r => (
-                            <RoleBadge key={r.name ?? r} name={r.name ?? r} />
-                          ))}
+                          {user.role && <RoleBadge name={user.role} />}
                         </div>
                       </td>
                       <td className="px-5 py-3 text-gray-400 text-xs">
@@ -350,18 +388,14 @@ export default function RolesPage() {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex gap-2 flex-wrap">
-                          {user.roles?.map(r => {
-                            const roleName = r.name ?? r
-                            return (
-                              <button
-                                key={roleName}
-                                onClick={() => handleRevoke(user.id, roleName)}
-                                className="text-xs text-red-500 hover:text-red-700 font-medium border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                              >
-                                Revoke {roleName}
-                              </button>
-                            )
-                          })}
+                          {user.role && (
+                            <button
+                              onClick={() => handleRevoke(user.id, user.role)}
+                              className="text-xs text-red-500 hover:text-red-700 font-medium border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                            >
+                              Revoke {user.role}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -373,6 +407,121 @@ export default function RolesPage() {
 
         </div>
       </div>
+
+      {/* Create User Modal */}
+      {showCreate && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-gray-800">Create New User</h2>
+              <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+            </div>
+
+            {createError && (
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
+                {createError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={newUser.name}
+                  onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))}
+                  placeholder="e.g. admin@studymatch.com"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-gray-500">Password</label>
+                  <button
+                    type="button"
+                    onClick={() => setNewUser(p => ({ ...p, password: generatePassword() }))}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Generate
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showPwd ? 'text' : 'password'}
+                    value={newUser.password}
+                    onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))}
+                    placeholder="Min. 8 characters"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 pr-16"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    {showPwd ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {newUser.password && (
+                  <p className="text-xs text-gray-400 mt-1 font-mono break-all">{newUser.password}</p>
+                )}
+              </div>
+
+              {/* Role */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Role</label>
+                <select
+                  value={newUser.role}
+                  onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                >
+                  <option value="admin">admin — Standard admin access</option>
+                  <option value="super_admin">super_admin — Full platform access</option>
+                  <option value="tutor">tutor — Tutor account (pre-approved)</option>
+                  <option value="student">student — Student account</option>
+                </select>
+              </div>
+
+              {/* Info note */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-xs text-amber-700">
+                <strong>Note:</strong> The user's email will be marked as verified. Share the password with them — they can change it from their profile settings.
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowCreate(false)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-medium py-2.5 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
+              >
+                {creating ? 'Creating...' : 'Create User'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   )

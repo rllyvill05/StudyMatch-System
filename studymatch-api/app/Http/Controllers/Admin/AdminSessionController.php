@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Session;
 use Illuminate\Http\Request;
 
@@ -45,6 +46,8 @@ class AdminSessionController extends Controller
     {
         $session = Session::findOrFail($id);
         $session->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+
+        AuditLog::record('update', 'sessions', "Admin cancelled session #{$id}", ['session_id' => $id]);
 
         return response()->json(['message' => 'Session cancelled.']);
     }

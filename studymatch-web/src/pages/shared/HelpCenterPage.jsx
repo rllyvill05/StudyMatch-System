@@ -40,9 +40,8 @@ export default function HelpCenterPage() {
   const fetchTickets = async () => {
     setLoading(true)
     try {
-      const res  = await getMyTickets()
-      const data = res?.data || res || []
-      setTickets(Array.isArray(data) ? data : [])
+      const res = await getMyTickets()
+      setTickets(Array.isArray(res.data?.tickets) ? res.data.tickets : [])
     } catch {}
     finally { setLoading(false) }
   }
@@ -196,7 +195,7 @@ export default function HelpCenterPage() {
                         {s.label}
                       </span>
                     </div>
-                    <p style={{ fontSize: 13.5, color: '#374151', lineHeight: 1.6, margin: 0 }}>{t.description}</p>
+                    <p style={{ fontSize: 13.5, color: '#374151', lineHeight: 1.6, margin: 0 }}>{t.message || t.description}</p>
                     {t.admin_response && (
                       <div style={{ marginTop: 10, padding: '10px 14px', background: '#F8F9FB', borderRadius: 8, fontSize: 13, color: '#6B7280' }}>
                         <span style={{ fontWeight: 600, color: '#374151' }}>Support response: </span>

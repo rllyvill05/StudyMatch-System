@@ -18,15 +18,15 @@ const typeConfig = {
     label:       'Sessions Report',
     description: 'All study sessions within the selected date range',
     color:       'emerald',
-    columns:     ['ID', 'Host', 'Partner', 'Subject', 'Status', 'Started'],
+    columns:     ['ID', 'Tutor', 'Student', 'Subject', 'Status', 'Scheduled'],
     row: (item) => [
       item.id,
-      item.host?.name ?? '—',
-      item.partner?.name ?? '—',
-      item.subject,
+      item.tutor?.user?.name ?? item.tutor?.name ?? '—',
+      item.student?.user?.name ?? item.student?.name ?? '—',
+      item.subject?.name ?? item.subject ?? '—',
       item.status,
-      item.started_at
-        ? new Date(item.started_at).toLocaleDateString()
+      item.scheduled_at
+        ? new Date(item.scheduled_at).toLocaleDateString()
         : '—',
     ],
   },

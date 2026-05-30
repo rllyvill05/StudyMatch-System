@@ -26,8 +26,8 @@ class AdminAuthController extends Controller
             ]);
         }
 
-        if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Access denied. Admin credentials required.'], 403);
+        if ($user->role !== 'super_admin') {
+            return response()->json(['message' => 'Access denied. Super admin credentials required for the Desktop Console.'], 403);
         }
 
         if ($user->suspended_at) {
@@ -36,7 +36,7 @@ class AdminAuthController extends Controller
 
         $token = $user->createToken('admin_token')->plainTextToken;
 
-        AuditLog::record('login', 'Auth', "Admin {$user->email} logged in");
+        AuditLog::record('login', 'auth', "Admin {$user->email} logged in", [], $user->id);
 
         return response()->json([
             'success' => true,
@@ -55,9 +55,11 @@ class AdminAuthController extends Controller
         /** @var \App\Models\User $admin */
         $admin = $request->user();
 
-        AuditLog::record('logout', 'Auth', "Admin {$admin->email} logged out");
+        AuditLog::record('logout', 'auth', "Admin {$admin->email} logged out");
 
-        $admin->currentAccessToken()->delete();
+        /** @var \Laravel\Sanctum\PersonalAccessToken $token */
+        $token = $admin->currentAccessToken();
+        $token->delete();
 
         return response()->json(['message' => 'Logged out successfully.']);
     }

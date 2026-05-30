@@ -20,7 +20,8 @@ class LibraryController extends Controller
 
         if ($user->role === 'student' && $user->student) {
             $query = Resource::query();
-            $this->applyScope($query, $request->merge(['scope' => 'all']), $user);
+            $request->merge(['scope' => 'all']);
+            $this->applyScope($query, $request, $user);
             $ids = $query->pluck('id');
 
             return response()->json([
@@ -53,7 +54,7 @@ class LibraryController extends Controller
         $this->applyScope($query, $request, $user);
         $this->applyFilters($query, $request);
         $this->applySort($query, $request);
-        $perPage   = min((int) $request->get('per_page', 50), 100);
+        $perPage   = min((int) $request->input('per_page', 50), 100);
         $paginator = $query->paginate($perPage);
 
         $favoriteIds = ResourceFavorite::where('user_id', $user->id)
@@ -81,7 +82,8 @@ class LibraryController extends Controller
         $user = $request->user();
 
         if ($request->filled('folder_id')) {
-            $folder = ResourceFolder::where('user_id', $user->id)->findOrFail($request->folder_id);
+            // Verifies the folder belongs to this user (throws 404 otherwise)
+            ResourceFolder::where('user_id', $user->id)->findOrFail($request->folder_id);
         }
 
         $file  = $request->file('file');
@@ -109,14 +111,17 @@ class LibraryController extends Controller
         ], 201);
     }
 
-    public function download(Request $request, $id)
+    public function download(Request $request, int $id)
     {
         $resource = Resource::findOrFail($id);
         $user     = $request->user();
 
         abort_unless($this->canAccess($user, $resource), 403, 'You do not have access to this resource.');
 
-        if (!Storage::disk('public')->exists($resource->file_path)) {
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        if (!$disk->exists($resource->file_path)) {
             return response()->json(['message' => 'File not found.'], 404);
         }
 
@@ -127,24 +132,27 @@ class LibraryController extends Controller
             'user_id'     => $user->id,
         ]);
 
-        return Storage::disk('public')->download(
+        return $disk->download(
             $resource->file_path,
             $resource->file_name ?: basename($resource->file_path)
         );
     }
 
-    public function preview(Request $request, $id)
+    public function preview(Request $request, int $id)
     {
         $resource = Resource::findOrFail($id);
         $user     = $request->user();
 
         abort_unless($this->canAccess($user, $resource), 403);
 
-        if (!Storage::disk('public')->exists($resource->file_path)) {
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        if (!$disk->exists($resource->file_path)) {
             return response()->json(['message' => 'File not found.'], 404);
         }
 
-        $url = Storage::disk('public')->url($resource->file_path);
+        $url = $disk->url($resource->file_path);
 
         return response()->json([
             'preview_url' => $url,
@@ -156,7 +164,7 @@ class LibraryController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, $id)
+    public function destroy(Request $request, int $id)
     {
         $resource = Resource::findOrFail($id);
         $user     = $request->user();
@@ -225,7 +233,7 @@ class LibraryController extends Controller
         return response()->json(['students' => $students]);
     }
 
-    public function share(Request $request, $id)
+    public function share(Request $request, int $id)
     {
         $request->validate([
             'user_ids'   => 'required|array|min:1',
@@ -254,7 +262,7 @@ class LibraryController extends Controller
         ]);
     }
 
-    public function toggleFavorite(Request $request, $id)
+    public function toggleFavorite(Request $request, int $id)
     {
         $resource = Resource::findOrFail($id);
         $user     = $request->user();
@@ -278,9 +286,9 @@ class LibraryController extends Controller
         return response()->json(['message' => 'Added to favorites.', 'is_favorited' => true]);
     }
 
-    private function applyScope($query, Request $request, $user): void
+    private function applyScope(\Illuminate\Database\Eloquent\Builder $query, Request $request, \App\Models\User $user): void
     {
-        $scope = $request->get('scope', 'all');
+        $scope = $request->input('scope', 'all');
 
         if ($scope === 'mine') {
             $query->where('uploader_id', $user->id);
@@ -312,7 +320,7 @@ class LibraryController extends Controller
         $query->where('uploader_id', $user->id);
     }
 
-    private function applyFilters($query, Request $request): void
+    private function applyFilters(\Illuminate\Database\Eloquent\Builder $query, Request $request): void
     {
         if ($request->filled('folder_id')) {
             $query->where('folder_id', $request->folder_id);
@@ -341,9 +349,9 @@ class LibraryController extends Controller
         }
     }
 
-    private function applySort($query, Request $request): void
+    private function applySort(\Illuminate\Database\Eloquent\Builder $query, Request $request): void
     {
-        $sort = $request->get('sort', 'newest');
+        $sort = $request->input('sort', 'newest');
 
         match ($sort) {
             'oldest'       => $query->oldest(),
@@ -366,7 +374,7 @@ class LibraryController extends Controller
         };
     }
 
-    private function canAccess($user, Resource $resource): bool
+    private function canAccess(\App\Models\User $user, Resource $resource): bool
     {
         if ($resource->uploader_id === $user->id) {
             return true;
@@ -377,7 +385,7 @@ class LibraryController extends Controller
             ->exists();
     }
 
-    private function ownedResourceIds($user): array
+    private function ownedResourceIds(\App\Models\User $user): array
     {
         return Resource::where('uploader_id', $user->id)->pluck('id')->all();
     }
@@ -390,8 +398,10 @@ class LibraryController extends Controller
         $data['folder_name'] = $resource->folder?->name;
         $data['shared_students_count'] = $resource->shares_count ?? $resource->shares()->count();
         $data['is_favorited'] = in_array($resource->id, $favoriteIds, true);
-        $data['preview_url'] = Storage::disk('public')->exists($resource->file_path ?? '')
-            ? Storage::disk('public')->url($resource->file_path)
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+        $data['preview_url'] = ($resource->file_path && $disk->exists($resource->file_path))
+            ? $disk->url($resource->file_path)
             : null;
         $data['file_extension'] = strtolower(pathinfo($resource->file_name ?? $resource->title ?? '', PATHINFO_EXTENSION));
 

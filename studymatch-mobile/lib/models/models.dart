@@ -347,3 +347,34 @@ class Conversation {
   int      get unreadCount  =>
       messages.where((m) => !m.isRead && m.senderId != 'current_user').length;
 }
+// ═════════════════════════════════════════════════════════════════════════════
+// NotificationItem
+// ═════════════════════════════════════════════════════════════════════════════
+class NotificationItem {
+  final int id;
+  final String type;
+  final String title;
+  final String message;
+  final bool isRead;
+  final DateTime createdAt;
+
+  const NotificationItem({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.message,
+    required this.isRead,
+    required this.createdAt,
+  });
+
+  factory NotificationItem.fromJson(Map<String, dynamic> j) => NotificationItem(
+        id:        (j['id'] as num).toInt(),
+        type:      j['type'] as String? ?? 'system',
+        title:     j['title'] as String? ?? '',
+        message:   j['message'] as String? ?? '',
+        isRead:    j['is_read'] == true || j['is_read'] == 1,
+        createdAt: j['created_at'] != null
+            ? DateTime.tryParse(j['created_at'] as String) ?? DateTime.now()
+            : DateTime.now(),
+      );
+}

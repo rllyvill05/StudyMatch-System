@@ -35,66 +35,49 @@ class AdminReportController extends Controller
             'report_type' => $request->type,
             'from'        => $from->toDateString(),
             'to'          => $to->toDateString(),
+            'total'       => count($data),
             'data'        => $data,
         ]);
     }
 
     private function usersReport($from, $to)
     {
-        return [
-            'total_registered' => User::whereBetween('created_at', [$from, $to])->where('role', '!=', 'admin')->count(),
-            'students'         => User::whereBetween('created_at', [$from, $to])->where('role', 'student')->count(),
-            'tutors'           => User::whereBetween('created_at', [$from, $to])->where('role', 'tutor')->count(),
-            'verified_emails'  => User::whereBetween('created_at', [$from, $to])->whereNotNull('email_verified_at')->count(),
-        ];
+        return User::whereBetween('created_at', [$from, $to])
+            ->whereNotIn('role', ['admin', 'super_admin'])
+            ->select('id', 'name', 'email', 'role', 'created_at')
+            ->orderByDesc('created_at')
+            ->get();
     }
 
     private function sessionsReport($from, $to)
     {
-        $query = Session::whereBetween('scheduled_at', [$from, $to]);
-
-        return [
-            'total'     => $query->count(),
-            'completed' => (clone $query)->where('status', 'completed')->count(),
-            'cancelled' => (clone $query)->where('status', 'cancelled')->count(),
-            'scheduled' => (clone $query)->where('status', 'scheduled')->count(),
-        ];
+        return Session::with(['tutor.user', 'student.user', 'subject'])
+            ->whereBetween('scheduled_at', [$from, $to])
+            ->orderByDesc('scheduled_at')
+            ->get();
     }
 
     private function requestsReport($from, $to)
     {
-        $query = TutorRequest::whereBetween('created_at', [$from, $to]);
-
-        return [
-            'total'    => $query->count(),
-            'pending'  => (clone $query)->where('status', 'pending')->count(),
-            'accepted' => (clone $query)->where('status', 'accepted')->count(),
-            'declined' => (clone $query)->where('status', 'declined')->count(),
-        ];
+        return TutorRequest::with(['student.user', 'tutor.user', 'subject'])
+            ->whereBetween('created_at', [$from, $to])
+            ->orderByDesc('created_at')
+            ->get();
     }
 
     private function complaintsReport($from, $to)
     {
-        $query = Complaint::whereBetween('created_at', [$from, $to]);
-
-        return [
-            'total'     => $query->count(),
-            'open'      => (clone $query)->where('status', 'open')->count(),
-            'reviewing' => (clone $query)->where('status', 'reviewing')->count(),
-            'resolved'  => (clone $query)->where('status', 'resolved')->count(),
-            'dismissed' => (clone $query)->where('status', 'dismissed')->count(),
-        ];
+        return Complaint::with(['submitter', 'reportedUser'])
+            ->whereBetween('created_at', [$from, $to])
+            ->orderByDesc('created_at')
+            ->get();
     }
 
     private function feedbackReport($from, $to)
     {
-        $query = Feedback::whereBetween('created_at', [$from, $to]);
-
-        return [
-            'total'   => $query->count(),
-            'unread'  => (clone $query)->where('status', 'unread')->count(),
-            'read'    => (clone $query)->where('status', 'read')->count(),
-            'flagged' => (clone $query)->where('status', 'flagged')->count(),
-        ];
+        return Feedback::with('user')
+            ->whereBetween('created_at', [$from, $to])
+            ->orderByDesc('created_at')
+            ->get();
     }
 }

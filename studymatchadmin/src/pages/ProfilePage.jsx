@@ -26,9 +26,10 @@ export default function ProfilePage() {
     setLoading(true)
     try {
       const res = await api.get('/admin/me')
-      setProfile(res.data)
-      setName(res.data.name)
-      setEmail(res.data.email)
+      const user = res.data.user ?? res.data
+      setProfile(user)
+      setName(user.name)
+      setEmail(user.email)
     } catch {
       setError('Failed to load profile.')
     } finally {
@@ -142,18 +143,11 @@ export default function ProfilePage() {
               {profile?.email}
             </p>
             <div className="flex gap-2 mt-2">
-              {profile?.roles?.map(role => (
-                <span
-                  key={role}
-                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    role === 'super_admin'
-                      ? 'bg-purple-100 text-purple-700'
-                      : 'bg-indigo-100 text-indigo-700'
-                  }`}
-                >
-                  {role}
+              {profile?.role && (
+                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                  {profile.role}
                 </span>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -162,7 +156,7 @@ export default function ProfilePage() {
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-gray-50 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-indigo-600">
-              {profile?.roles?.length ?? 0}
+              {profile?.role ? 1 : 0}
             </p>
             <p className="text-xs text-gray-500 mt-1">Roles assigned</p>
           </div>
@@ -338,14 +332,11 @@ export default function ProfilePage() {
           <div className="flex justify-between py-2 border-b border-gray-50">
             <span className="text-gray-500">Roles</span>
             <div className="flex gap-1">
-              {profile?.roles?.map(role => (
-                <span
-                  key={role}
-                  className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-xs font-medium"
-                >
-                  {role}
+              {profile?.role && (
+                <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-xs font-medium">
+                  {profile.role}
                 </span>
-              ))}
+              )}
             </div>
           </div>
           <div className="flex justify-between py-2 border-b border-gray-50">

@@ -23,7 +23,7 @@ import {
 import {
   Search, ChevronDown, Bookmark, Check, X,
   ChevronRight, Clock, BookOpen, Target, MapPin,
-  Users, MessageSquare, Calendar, Trophy, ArrowRight,
+  Users, MessageSquare, Calendar,
   Loader2, GraduationCap,
 } from 'lucide-react'
 
@@ -717,24 +717,6 @@ export default function TutorDashboardPage() {
             </div>
           </div>
 
-          {/* Become a Top Tutor */}
-          <div style={{ background: 'linear-gradient(135deg, #7C3AED, #6366F1)', borderRadius: 16, padding: '20px' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <Trophy size={20} color="white" />
-            </div>
-            <div style={{ fontWeight: 800, fontSize: 15, color: 'white', marginBottom: 8 }}>Become a Top Tutor</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, marginBottom: 16 }}>
-              Help more students, build connections, and grow your impact.
-            </div>
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '10px 16px', background: 'white', color: '#7C3AED',
-              border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              View Progress <ArrowRight size={14} />
-            </button>
-          </div>
         </div>
       </div>
 

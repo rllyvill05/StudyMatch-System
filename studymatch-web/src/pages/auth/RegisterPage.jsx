@@ -77,6 +77,7 @@ export default function RegisterPage() {
   const [error,setError]=useState(''); const [loading,setLoading]=useState(false)
   const [registered,setRegistered]=useState(false); const [registeredEmail,setRegisteredEmail]=useState('')
   const [otp,setOtp]=useState(['','','','','','']); const [resendTimer,setResendTimer]=useState(0)
+  const [emailVerified,setEmailVerified]=useState(false)
   const otpRefs=useRef([])
   const [bio,setBio]=useState(''); const [course,setCourse]=useState(''); const [yearLevel,setYearLevel]=useState('')
   const [goodAt,setGoodAt]=useState([]); const [needHelp,setNeedHelp]=useState([])
@@ -103,11 +104,11 @@ export default function RegisterPage() {
   const handleNext=async()=>{
     setError('')
     if(step===1){ const err=v1();if(err){setError(err);return};setLoading(true);if(registered&&registeredEmail===formData.email){try{await sendOtp();setResendTimer(60);setStep(2)}catch(e){setError(e.response?.data?.message||'Failed to resend verification code.')}finally{setLoading(false)};return};try{const res=await register({...formData,role:role==='tutor'?'tutor':'student'});saveAuth(res.data.token,res.data.user);setRegistered(true);setRegisteredEmail(formData.email);setResendTimer(60);setStep(2)}catch(e){setError(e.response?.data?.message||'Registration failed.')}finally{setLoading(false)};return }
-    if(step===2){ const code=otp.join('');if(code.length<6){setError('Please enter the 6-digit code.');return};setLoading(true);try{await verifyOtp(code);setStep(3)}catch(e){setError(e.response?.data?.message||'Invalid or expired code.')}finally{setLoading(false)};return }
+    if(step===2){ const code=otp.join('');if(emailVerified){setStep(3);return};if(code.length<6){setError('Please enter the 6-digit code.');return};setLoading(true);try{await verifyOtp(code);setEmailVerified(true);setStep(3)}catch(e){const msg=e.response?.data?.message||'Invalid or expired code.';if(msg.toLowerCase().includes('already verified')){setEmailVerified(true);setStep(3);return};setError(msg)}finally{setLoading(false)};return }
     setStep(s=>s+1)
   }
   const handleBack=()=>{ setError('');if(step===1)setStep(0);else setStep(s=>s-1) }
-  const handleResend=async()=>{ if(resendTimer>0)return;setError('');setLoading(true);try{await sendOtp({email:formData.email});setResendTimer(60);setOtp(['','','','','','']);otpRefs.current[0]?.focus()}catch(e){setError(e.response?.data?.message||'Failed to resend.')}finally{setLoading(false)} }
+  const handleResend=async()=>{ if(resendTimer>0)return;setError('');setLoading(true);try{await sendOtp({email:formData.email});setResendTimer(60);setOtp(['','','','','','']);otpRefs.current[0]?.focus()}catch(e){const msg=e.response?.data?.message||'Failed to resend.';if(msg.toLowerCase().includes('already verified')){setEmailVerified(true);setError('');return};setError(msg)}finally{setLoading(false)} }
 
   const YEAR_MAP = {'1st Year':'1st','2nd Year':'2nd','3rd Year':'3rd','4th Year':'4th','5th Year':'5th','Graduate':'5th'}
 
@@ -126,7 +127,25 @@ export default function RegisterPage() {
     if (!tOk) return
     setLoading(true)
     try {
-      await updateProfileStep2({ position: tPos, employee_id: tEmpId, specialization: tDept })
+      await updateProfileStep2({
+        position:       tPos,
+        employee_id:    tEmpId,
+        specialization: tSubs.join(', '),
+        credentials:    tAtt,
+        bio: JSON.stringify({
+          department:       tDept,
+          experience:       tExp,
+          education:        tAtt,
+          teaching_license: tLic,
+          grade_levels:     tGrades,
+          teaching_style:   tStyle,
+          teaching_mode:    tMode,
+          days:             tDays,
+          from_time:        tFrom,
+          to_time:          tTo,
+          subjects:         tSubs,
+        }),
+      })
       await completeProfile()
     } catch(e) {}
     finally { setLoading(false) }
@@ -313,9 +332,21 @@ export default function RegisterPage() {
               {/* Step 2: OTP */}
               {step===2&&(
                 <>
-                  <div className="rp-otp-hint">We sent a 6-digit code to<br/><strong>{formData.email}</strong></div>
-<div className="rp-otp-boxes" onPaste={hotpP}>{otp.map((d,i)=><input key={i} ref={el=>otpRefs.current[i]=el} className={`rp-otp-box${d?' f':''}`} type="text" inputMode="numeric" maxLength={1} value={d} onChange={e=>hotp(i,e.target.value)} onKeyDown={e=>hotpK(i,e)}/>)}</div>
-                  <div className="rp-resend">Didn't receive it?<button className={resendTimer>0?'no':'can'} onClick={handleResend} disabled={resendTimer>0||loading}>{resendTimer>0?`Resend in ${resendTimer}s`:'Resend code'}</button></div>
+                  {emailVerified ? (
+                    <div style={{ textAlign:'center', padding:'20px 0' }}>
+                      <div style={{ width:64, height:64, borderRadius:'50%', background:'rgba(16,185,129,0.15)', border:'2px solid rgba(16,185,129,0.3)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
+                        <Check size={28} color="#10B981" />
+                      </div>
+                      <div style={{ fontSize:17, fontWeight:700, color:'#eae6ff', marginBottom:6 }}>Email Verified!</div>
+                      <div style={{ fontSize:13, color:'rgba(255,255,255,0.4)', marginBottom:24 }}>Your email <strong style={{ color:'rgba(255,255,255,0.7)' }}>{formData.email}</strong> has been verified. You can continue to the next step.</div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="rp-otp-hint">We sent a 6-digit code to<br/><strong>{formData.email}</strong></div>
+                      <div className="rp-otp-boxes" onPaste={hotpP}>{otp.map((d,i)=><input key={i} ref={el=>otpRefs.current[i]=el} className={`rp-otp-box${d?' f':''}`} type="text" inputMode="numeric" maxLength={1} value={d} onChange={e=>hotp(i,e.target.value)} onKeyDown={e=>hotpK(i,e)}/>)}</div>
+                      <div className="rp-resend">Didn't receive it?<button className={resendTimer>0?'no':'can'} onClick={handleResend} disabled={resendTimer>0||loading}>{resendTimer>0?`Resend in ${resendTimer}s`:'Resend code'}</button></div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -442,7 +473,7 @@ export default function RegisterPage() {
             {/* Footer buttons */}
             <div className="rp-footer">
               {step===1&&(<><div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleNext} disabled={loading}>{loading?'Creating...':'Next'}</button></div><div className="rp-link">Already have an account? <NavLink to="/login">Log in</NavLink></div></>)}
-              {step===2&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleNext} disabled={loading}>{loading?'Verifying...':'Verify'}</button></div>}
+              {step===2&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1, background: emailVerified ? '#10B981' : undefined }} onClick={handleNext} disabled={loading}>{loading?'Verifying...':(emailVerified?'Continue →':'Verify')}</button></div>}
               {role==='student'&&step===3&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleNext}>Next</button></div>}
               {role==='student'&&step===4&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleStudentFinish} disabled={loading}>{loading?'Finishing...':'Create account'}</button></div>}
               {role==='tutor'&&(step===3||step===4)&&<div className="rp-btn-row"><button className="rp-btn-bk" onClick={handleBack}>Back</button><button className="rp-btn" style={{ flex:1 }} onClick={handleNext}>Next</button></div>}
